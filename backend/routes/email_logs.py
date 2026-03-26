@@ -1,13 +1,15 @@
 """
-Email Logs API Routes - Track all sent emails
+Email Logs API Routes - Track all sent emails with open/click tracking
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi.responses import RedirectResponse
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 import logging
 import uuid
 import json
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,12 @@ def set_supabase_client(client):
     global supabase
     supabase = client
     logger.info("✅ Supabase client set for email logs route")
+
+
+# 1x1 transparent GIF for tracking pixel
+TRACKING_PIXEL = base64.b64decode(
+    "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+)
 
 
 class EmailLogCreate(BaseModel):
@@ -142,7 +150,7 @@ async def get_email_logs(
 
 @router.get("/stats")
 async def get_email_stats(days: int = Query(default=30, le=365)):
-    """Get email statistics"""
+    """Get email statistics including opens and clicks"""
     if not supabase:
         raise HTTPException(status_code=500, detail="Database not configured")
     
@@ -157,6 +165,16 @@ async def get_email_stats(days: int = Query(default=30, le=365)):
         total = len(logs)
         sent = len([l for l in logs if l.get("status") == "sent"])
         failed = len([l for l in logs if l.get("status") == "failed"])
+        
+        # Calculate opens and clicks
+        total_opens = sum(l.get("opens", 0) or 0 for l in logs)
+        total_clicks = sum(l.get("clicks", 0) or 0 for l in logs)
+        emails_opened = len([l for l in logs if (l.get("opens", 0) or 0) > 0])
+        emails_clicked = len([l for l in logs if (l.get("clicks", 0) or 0) > 0])
+        
+        # Calculate rates (only for sent emails)
+        open_rate = round(emails_opened / sent * 100, 1) if sent > 0 else 0
+        click_rate = round(emails_clicked / sent * 100, 1) if sent > 0 else 0
         
         # Group by type
         by_type = {}
@@ -178,6 +196,12 @@ async def get_email_stats(days: int = Query(default=30, le=365)):
             "sent": sent,
             "failed": failed,
             "success_rate": round(sent / total * 100, 1) if total > 0 else 0,
+            "total_opens": total_opens,
+            "total_clicks": total_clicks,
+            "emails_opened": emails_opened,
+            "emails_clicked": emails_clicked,
+            "open_rate": open_rate,
+            "click_rate": click_rate,
             "by_type": by_type,
             "by_day": by_day,
             "recent": recent,
@@ -205,3 +229,71 @@ async def get_email_types():
             {"id": "gift_card", "label": "Cadeaubon", "icon": "🎁"},
         ]
     }
+
+
+# ============== EMAIL TRACKING ==============
+
+@router.get("/track/open/{email_id}")
+async def track_email_open(email_id: str):
+    """Track email open via invisible pixel - returns 1x1 transparent GIF"""
+    global supabase
+    
+    if supabase:
+        try:
+            # Update opens count
+            result = supabase.table("email_logs").select("opens").eq("id", email_id).limit(1).execute()
+            if result.data:
+                current_opens = result.data[0].get("opens", 0) or 0
+                supabase.table("email_logs").update({
+                    "opens": current_opens + 1,
+                    "last_opened_at": datetime.now(timezone.utc).isoformat()
+                }).eq("id", email_id).execute()
+                logger.info(f"📧 Email opened: {email_id}")
+        except Exception as e:
+            logger.warning(f"Failed to track email open: {e}")
+    
+    # Return transparent 1x1 GIF
+    return Response(
+        content=TRACKING_PIXEL,
+        media_type="image/gif",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+    )
+
+
+@router.get("/track/click/{email_id}")
+async def track_email_click(email_id: str, url: str = "https://droomvriendjes.nl"):
+    """Track email click and redirect to destination URL"""
+    global supabase
+    
+    if supabase:
+        try:
+            # Update clicks count
+            result = supabase.table("email_logs").select("clicks").eq("id", email_id).limit(1).execute()
+            if result.data:
+                current_clicks = result.data[0].get("clicks", 0) or 0
+                supabase.table("email_logs").update({
+                    "clicks": current_clicks + 1,
+                    "last_clicked_at": datetime.now(timezone.utc).isoformat()
+                }).eq("id", email_id).execute()
+                logger.info(f"📧 Email clicked: {email_id} -> {url}")
+        except Exception as e:
+            logger.warning(f"Failed to track email click: {e}")
+    
+    # Redirect to destination
+    return RedirectResponse(url=url, status_code=302)
+
+
+def get_tracking_pixel_url(email_id: str, base_url: str = "https://droomvriendjes.nl") -> str:
+    """Generate tracking pixel URL for an email"""
+    return f"{base_url}/api/email-logs/track/open/{email_id}"
+
+
+def get_tracking_link(email_id: str, destination_url: str, base_url: str = "https://droomvriendjes.nl") -> str:
+    """Generate tracked link URL for an email"""
+    import urllib.parse
+    encoded_url = urllib.parse.quote(destination_url, safe='')
+    return f"{base_url}/api/email-logs/track/click/{email_id}?url={encoded_url}"

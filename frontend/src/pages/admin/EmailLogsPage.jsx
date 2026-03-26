@@ -4,7 +4,7 @@ import { useAdminAuth } from '../../context/AdminAuthContext';
 import {
   Mail, Send, CheckCircle, XCircle, RefreshCw, Filter,
   Calendar, User, Package, Search, ArrowLeft, BarChart3,
-  TrendingUp, Clock, Inbox, AlertCircle
+  TrendingUp, Clock, Inbox, AlertCircle, Eye, MousePointerClick
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -161,14 +161,14 @@ const AdminEmailLogsPage = () => {
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* Stats Cards */}
         {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
             <div className="bg-white rounded-xl shadow-sm border p-5">
               <div className="flex items-center gap-3">
                 <div className="p-3 bg-violet-100 rounded-lg">
                   <Send className="w-5 h-5 text-violet-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Totaal verzonden</p>
+                  <p className="text-sm text-gray-500">Totaal</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.total_emails}</p>
                 </div>
               </div>
@@ -194,6 +194,32 @@ const AdminEmailLogsPage = () => {
                 <div>
                   <p className="text-sm text-gray-500">Mislukt</p>
                   <p className="text-2xl font-bold text-red-600">{stats.failed}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-sm border p-5">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-amber-100 rounded-lg">
+                  <Eye className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Geopend</p>
+                  <p className="text-2xl font-bold text-amber-600">{stats.total_opens || 0}</p>
+                  <p className="text-xs text-gray-400">{stats.open_rate || 0}% open rate</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-sm border p-5">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-cyan-100 rounded-lg">
+                  <MousePointerClick className="w-5 h-5 text-cyan-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Kliks</p>
+                  <p className="text-2xl font-bold text-cyan-600">{stats.total_clicks || 0}</p>
+                  <p className="text-xs text-gray-400">{stats.click_rate || 0}% click rate</p>
                 </div>
               </div>
             </div>
@@ -324,7 +350,8 @@ const AdminEmailLogsPage = () => {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Ontvanger</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Onderwerp</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Order</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Opens</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Kliks</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Datum</th>
                   </tr>
                 </thead>
@@ -365,12 +392,17 @@ const AdminEmailLogsPage = () => {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3">
-                          {log.order_id ? (
-                            <span className="text-sm font-mono text-violet-600">#{log.order_id.slice(-8).toUpperCase()}</span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <Eye className="w-3.5 h-3.5 text-amber-500" />
+                            <span className="text-sm font-medium text-gray-700">{log.opens || 0}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <MousePointerClick className="w-3.5 h-3.5 text-cyan-500" />
+                            <span className="text-sm font-medium text-gray-700">{log.clicks || 0}</span>
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <p className="text-sm text-gray-500 flex items-center gap-1">
