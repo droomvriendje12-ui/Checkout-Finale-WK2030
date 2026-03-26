@@ -235,7 +235,11 @@ api_router.include_router(csv_import_route.router)
 # Include marketing router (already has /api prefix in route)
 app.include_router(marketing_route.router)
 
-# Include database info router
+# Dashboard Analytics
+app.include_router(dashboard_analytics_route.router)
+dashboard_analytics_route.set_supabase_client(supabase_client)
+
+# Database Info
 app.include_router(database_info_route.router)
 
 # ============== GOOGLE SHOPPING FEED CONSTANTS ==============
