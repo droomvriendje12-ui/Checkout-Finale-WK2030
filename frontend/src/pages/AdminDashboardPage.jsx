@@ -8,7 +8,7 @@ import {
   Settings, LogOut, ExternalLink, RefreshCw, Calendar,
   ArrowUpRight, ArrowDownRight, Clock, CheckCircle, XCircle,
   AlertTriangle, BarChart3, Target, ShoppingBag, Mail, Filter,
-  MessageSquare
+  MessageSquare, Trophy
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || '';
