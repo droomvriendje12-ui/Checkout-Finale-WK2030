@@ -14,7 +14,7 @@ from datetime import datetime
 import time
 
 # Configuration
-BASE_URL = "https://product-editor-4.preview.emergentagent.com/api"
+BASE_URL = "https://ai-campaigns-4.preview.emergentagent.com/api"
 HEADERS = {"Content-Type": "application/json"}
 
 class DroomvriendjesAPITester:
