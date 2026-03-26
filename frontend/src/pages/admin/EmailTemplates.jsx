@@ -184,6 +184,35 @@ const EmailTemplatesAdmin = () => {
     }
   };
 
+  // Direct verzenden naar klantengroep
+  const sendToCustomers = async (templateId, customerGroup = 'all') => {
+    if (!confirm(`Weet je zeker dat je deze email wilt versturen naar ${customerGroup === 'all' ? 'alle klanten' : customerGroup}?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/email/send-bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template_id: templateId,
+          customer_group: customerGroup
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert(`✅ Email verstuurd naar ${data.total_sent} klanten!`);
+        fetchTemplates();
+      } else {
+        alert(`❌ Fout: ${data.detail || 'Verzenden mislukt'}`);
+      }
+    } catch (error) {
+      alert(`❌ Fout: ${error.message}`);
+    }
+  };
+
   // Cleanup polling on unmount
   useEffect(() => {
     return () => { if (progressRef.current) clearInterval(progressRef.current); };
