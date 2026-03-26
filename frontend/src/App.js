@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { CartProvider } from "./context/CartContext";
+import { ProductsProvider } from "./context/ProductsContext";
 import { AdminAuthProvider, ProtectedAdminRoute } from "./context/AdminAuthContext";
 import HomePage from "./pages/HomePage";
 import ProductPage from "./pages/ProductPage";
@@ -45,8 +46,13 @@ import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminDiscountCodesPage from "./pages/AdminDiscountCodesPage";
 import AdminProductsPage from "./pages/AdminProductsPage";
+import AdminProductsPageV2 from "./pages/AdminProductsPageV2";
 import AdminAdvancedProductEditor from "./pages/AdminAdvancedProductEditor";
-import EmailMarketingPage from "./pages/EmailMarketingPage";
+import AdminCommandCenter from "./pages/AdminCommandCenter";
+import AdminCommandCenterNew from "./pages/AdminCommandCenterNew";
+import MarketingDashboardPage from "./pages/MarketingDashboardPage";
+import MarketingCommandCenter from "./pages/MarketingCommandCenter";
+import LeadManagementPage from "./pages/LeadManagementPage";
 import TipsBedtijdPage from "./pages/TipsBedtijdPage";
 import OudersSlaaptipsPage from "./pages/OudersSlaaptipsPage";
 import RustmomentOudersPage from "./pages/RustmomentOudersPage";
@@ -54,9 +60,13 @@ import VerzendingPage from "./pages/VerzendingPage";
 import CampaignManagementPage from "./pages/CampaignManagementPage";
 import OfflineLandingPage from "./pages/OfflineLandingPage";
 import SeoLandingPage from "./pages/SeoLandingPage";
+import BabySlaaptNietPage from "./pages/BabySlaaptNietPage";
 import AdminReviewsImporterPage from "./pages/AdminReviewsImporterPage";
 import AdminReviewsToolAdvanced from "./pages/AdminReviewsToolAdvanced";
+import AdminDatabasePage from "./pages/AdminDatabasePage";
+import EmailTemplatesAdmin from "./pages/admin/EmailTemplates";
 import DroomvriendjesReviewsPage from "./pages/DroomvriendjesReviewsPage";
+import PresentationPage from "./pages/PresentationPage";
 import { Toaster } from "./components/ui/toaster";
 import ScrollToTop from "./components/ScrollToTop";
 
@@ -69,6 +79,7 @@ function App() {
   return (
     <HelmetProvider>
     <div className="App">
+      <ProductsProvider>
       <CartProvider>
         <BrowserRouter>
           <ScrollToTop />
@@ -104,7 +115,10 @@ function App() {
               {/* Offline Marketing Landing Pages */}
               <Route path="/actie/:channel" element={<OfflineLandingPage />} />
               <Route path="/qr/:channel" element={<OfflineLandingPage />} />
-              {/* SEO Landing Pages */}
+              {/* Marketing Presentatie */}
+              <Route path="/presentatie" element={<PresentationPage />} />
+              {/* SEO Landing Pages - AI Optimized */}
+              <Route path="/baby-slaapt-niet" element={<BabySlaaptNietPage />} />
               <Route path="/slaapknuffel" element={<SeoLandingPage />} />
               <Route path="/knuffel-nachtlampje" element={<SeoLandingPage />} />
               <Route path="/baby-nachtlamp" element={<SeoLandingPage />} />
@@ -128,12 +142,17 @@ function App() {
               {/* Admin Login (Public) */}
               <Route path="/admin/login" element={<AdminLoginPage />} />
               
+              {/* Admin Command Center 2026 - Main Dashboard */}
+              <Route path="/admin" element={<ProtectedAdminRoute><AdminCommandCenterNew /></ProtectedAdminRoute>} />
+              <Route path="/admin/dashboard" element={<ProtectedAdminRoute><AdminCommandCenterNew /></ProtectedAdminRoute>} />
+              <Route path="/admin/command-center" element={<ProtectedAdminRoute><AdminCommandCenterNew /></ProtectedAdminRoute>} />
+              <Route path="/admin/command-center-old" element={<ProtectedAdminRoute><AdminCommandCenter /></ProtectedAdminRoute>} />
+              
               {/* Protected Admin Routes */}
-              <Route path="/admin" element={<ProtectedAdminRoute><AdminDashboardPage /></ProtectedAdminRoute>} />
-              <Route path="/admin/dashboard" element={<ProtectedAdminRoute><AdminDashboardPage /></ProtectedAdminRoute>} />
               <Route path="/admin/orders" element={<ProtectedAdminRoute><AdminOrdersPage /></ProtectedAdminRoute>} />
               <Route path="/admin/discount-codes" element={<ProtectedAdminRoute><AdminDiscountCodesPage /></ProtectedAdminRoute>} />
-              <Route path="/admin/products" element={<ProtectedAdminRoute><AdminProductsPage /></ProtectedAdminRoute>} />
+              <Route path="/admin/products" element={<ProtectedAdminRoute><AdminProductsPageV2 /></ProtectedAdminRoute>} />
+              <Route path="/admin/products-old" element={<ProtectedAdminRoute><AdminProductsPage /></ProtectedAdminRoute>} />
               <Route path="/admin/products/:productId/advanced-editor" element={<ProtectedAdminRoute><AdminAdvancedProductEditor /></ProtectedAdminRoute>} />
               <Route path="/admin/google-ads" element={<ProtectedAdminRoute><GoogleAdsPage /></ProtectedAdminRoute>} />
               <Route path="/admin/google-ads/callback" element={<GoogleAdsCallbackPage />} />
@@ -141,15 +160,19 @@ function App() {
               <Route path="/admin/shopping-campaigns" element={<ProtectedAdminRoute><ShoppingCampaignsPage /></ProtectedAdminRoute>} />
               <Route path="/admin/shopping-campaigns/data" element={<ProtectedAdminRoute><ShoppingCampaignsDataPage /></ProtectedAdminRoute>} />
               <Route path="/admin/keywords" element={<ProtectedAdminRoute><KeywordsPage /></ProtectedAdminRoute>} />
-              <Route path="/admin/email-marketing" element={<ProtectedAdminRoute><EmailMarketingPage /></ProtectedAdminRoute>} />
+              <Route path="/admin/email-marketing" element={<ProtectedAdminRoute><MarketingCommandCenter /></ProtectedAdminRoute>} />
+              <Route path="/admin/leads" element={<ProtectedAdminRoute><LeadManagementPage /></ProtectedAdminRoute>} />
               <Route path="/admin/campaigns" element={<ProtectedAdminRoute><CampaignManagementPage /></ProtectedAdminRoute>} />
               <Route path="/admin/product-reviews-importer" element={<ProtectedAdminRoute><AdminReviewsImporterPage /></ProtectedAdminRoute>} />
               <Route path="/admin/reviews-tool" element={<ProtectedAdminRoute><AdminReviewsToolAdvanced /></ProtectedAdminRoute>} />
+              <Route path="/admin/database" element={<ProtectedAdminRoute><AdminDatabasePage /></ProtectedAdminRoute>} />
+              <Route path="/admin/email-templates" element={<ProtectedAdminRoute><EmailTemplatesAdmin /></ProtectedAdminRoute>} />
             </Routes>
             <Toaster />
           </AdminAuthProvider>
         </BrowserRouter>
       </CartProvider>
+      </ProductsProvider>
     </div>
     </HelmetProvider>
   );

@@ -1,9 +1,9 @@
 // Mock data voor Droomvriendjes website
 
 export const products = [
-  // DE SLIMME AI-SERIE - Leeuw (FM666-61)
+  // DE SLIMME AI-SERIE - Leeuw (FM666-61) - DATABASE ID: 14
   {
-    id: 1,
+    id: 14,
     name: "Slimme Leeuw – Nachtlampje met AI Huilsensor & Projector – USB-C Oplaadbaar",
     shortName: "Slimme Leeuw",
     price: 49.95,
@@ -41,7 +41,7 @@ export const products = [
     ageRange: "Vanaf 0 maanden",
     warranty: "30 dagen slaapgarantie",
     sku: "FM666-61",
-    item_id: "KNUF_001",
+    item_id: "KNUF_014",
     item_category: "Knuffels",
     item_category2: "AI Slaapknuffels",
     item_category3: "Slimme Serie",
@@ -241,8 +241,9 @@ export const products = [
     item_category5: "Met Beweging",
     item_variant: "roze-wit"
   },
+  // DUO SET - DATABASE ID: 15
   {
-    id: 6,
+    id: 15,
     name: "Droomvriendjes Duo Set – Liggend Schaapje & Witte Beer met Projector",
     shortName: "Duo Set",
     price: 89.95,
@@ -277,7 +278,7 @@ export const products = [
     ageRange: "Vanaf 0 maanden",
     warranty: "30 dagen slaapgarantie",
     sku: "DUO-001",
-    item_id: "KNUF_006",
+    item_id: "KNUF_015",
     item_category: "Knuffels",
     item_category2: "Voordeelsets",
     item_category3: "Duo Sets",
@@ -816,8 +817,8 @@ export const faqs = [
     answer: "Onze knuffels zijn geschikt vanaf 0 maanden. Ze zijn veilig getest en voldoen aan alle Europese veiligheidsnormen (CE-gecertificeerd)."
   },
   {
-    question: "Wat is de 2 KOPEN 3E GRATIS actie?",
-    answer: "Bij aankoop van 2 knuffels krijg je de 3e knuffel helemaal gratis! De korting wordt automatisch toegepast in je winkelwagen. Perfect voor grotere gezinnen of als cadeau!"
+    question: "Hoe lang gaat de batterij mee?",
+    answer: "Goed nieuws: de batterijen gaan gemiddeld meerdere weken mee, afhankelijk van hoe vaak je de knuffel gebruikt. En je hoeft je geen zorgen te maken over onnodig verbruik – de knuffel schakelt zichzelf automatisch uit na 30 minuten om energie te besparen. Zo geniet je kindje langer van zijn droomvriendje zonder dat jij steeds aan de batterijen hoeft te denken!"
   },
   {
     question: "Hoe werken de licht- en muziekfuncties?",

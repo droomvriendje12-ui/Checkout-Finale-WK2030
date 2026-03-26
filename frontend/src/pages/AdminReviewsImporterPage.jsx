@@ -21,9 +21,8 @@ import {
   User,
   FileText
 } from 'lucide-react';
-import { products } from '../mockData';
+import { products as mockProducts } from '../mockData';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 const AdminReviewsImporterPage = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -38,11 +37,33 @@ const AdminReviewsImporterPage = () => {
   const [filterSource, setFilterSource] = useState('');
   const [filterVisibility, setFilterVisibility] = useState('');
 
+  // Products from Supabase
+  const [products, setProducts] = useState([]);
+
+  // Fetch products from Supabase
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch('/api/products');
+      if (response.ok) {
+        const data = await response.json();
+        setProducts(data.map(p => ({
+          id: p.id,
+          shortName: p.short_name || p.shortName || p.name,
+          name: p.name,
+          image: p.image,
+          price: p.price
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    }
+  };
+
   // Fetch reviews from database (including hidden for admin)
   const fetchReviews = async () => {
     setLoadingReviews(true);
     try {
-      const response = await fetch(`${API_URL}/api/reviews/admin`);
+      const response = await fetch(`/api/reviews/admin`);
       if (response.ok) {
         const data = await response.json();
         setReviews(data);
@@ -56,7 +77,7 @@ const AdminReviewsImporterPage = () => {
   // Fetch review stats
   const fetchStats = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/reviews/stats`);
+      const response = await fetch(`/api/reviews/stats`);
       if (response.ok) {
         const data = await response.json();
         setStats(data);
@@ -67,6 +88,7 @@ const AdminReviewsImporterPage = () => {
   };
 
   useEffect(() => {
+    fetchProducts();
     fetchReviews();
     fetchStats();
   }, []);
@@ -74,8 +96,8 @@ const AdminReviewsImporterPage = () => {
   // Handle toggle visibility
   const handleToggleVisibility = async (reviewId, currentVisible) => {
     try {
-      const response = await fetch(`${API_URL}/api/reviews/${reviewId}/visibility?visible=${!currentVisible}`, {
-        method: 'PATCH'
+      const response = await fetch(`/api/reviews/${reviewId}/visibility?visible=${!currentVisible}`, {
+        method: 'PUT'
       });
 
       if (response.ok) {
@@ -115,7 +137,7 @@ const AdminReviewsImporterPage = () => {
       formData.append('product_id', selectedProduct.id);
       formData.append('product_name', selectedProduct.shortName);
 
-      const response = await fetch(`${API_URL}/api/reviews/import-csv`, {
+      const response = await fetch(`/api/reviews/import-csv`, {
         method: 'POST',
         body: formData
       });
@@ -152,7 +174,7 @@ const AdminReviewsImporterPage = () => {
     if (!window.confirm('Weet je zeker dat je deze review wilt verwijderen?')) return;
 
     try {
-      const response = await fetch(`${API_URL}/api/reviews/${reviewId}`, {
+      const response = await fetch(`/api/reviews/${reviewId}`, {
         method: 'DELETE'
       });
 
@@ -172,8 +194,11 @@ const AdminReviewsImporterPage = () => {
     if (!window.confirm(`Weet je zeker dat je ALLE ${reviews.length} reviews wilt verwijderen? Dit kan niet ongedaan worden gemaakt!`)) return;
 
     try {
-      const response = await fetch(`${API_URL}/api/reviews`, {
-        method: 'DELETE'
+      const ids = reviews.map(r => r.id);
+      const response = await fetch(`/api/reviews/bulk-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
       });
 
       if (response.ok) {
@@ -293,7 +318,7 @@ const AdminReviewsImporterPage = () => {
                 <select
                   value={selectedProduct?.id || ''}
                   onChange={(e) => {
-                    const product = products.find(p => p.id === parseInt(e.target.value));
+                    const product = products.find(p => p.id === e.target.value);
                     setSelectedProduct(product);
                   }}
                   className="w-full border rounded-lg px-3 py-2 text-sm"

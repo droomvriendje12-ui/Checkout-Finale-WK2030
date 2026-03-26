@@ -16,10 +16,11 @@ import {
   Upload,
   CheckCircle,
   AlertCircle,
-  Rocket
+  Rocket,
+  Trash2,
+  X
 } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 const MerchantFeedPage = () => {
   const [feedData, setFeedData] = useState(null);
@@ -28,6 +29,9 @@ const MerchantFeedPage = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null); // null, 'success', 'error'
   const [uploadMessage, setUploadMessage] = useState('');
+  const [deletingProductId, setDeletingProductId] = useState(null);
+  const [deleteStatus, setDeleteStatus] = useState(null); // null, 'success', 'error'
+  const [deleteMessage, setDeleteMessage] = useState('');
 
   useEffect(() => {
     fetchFeedData();
@@ -36,7 +40,7 @@ const MerchantFeedPage = () => {
   const fetchFeedData = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/feed/products`);
+      const response = await fetch(`/api/feed/products`);
       const data = await response.json();
       setFeedData(data);
     } catch (error) {
@@ -54,7 +58,69 @@ const MerchantFeedPage = () => {
   };
 
   const openFeed = () => {
-    window.open(`${API_URL}/api/feed/google-shopping.xml`, '_blank');
+    window.open(`/api/feed/google-shopping.xml`, '_blank');
+  };
+
+  const handleDeleteProduct = async (productId, productTitle) => {
+    // Confirm deletion
+    const confirmed = window.confirm(
+      `Weet je zeker dat je "${productTitle}" wilt verwijderen?\n\n` +
+      `Dit product wordt permanent verwijderd uit:\n` +
+      `• De database\n` +
+      `• Google Merchant Feed\n` +
+      `• De website\n\n` +
+      `Deze actie kan niet ongedaan worden gemaakt!`
+    );
+    
+    if (!confirmed) return;
+    
+    setDeletingProductId(productId);
+    setDeleteStatus(null);
+    setDeleteMessage('');
+    
+    try {
+      // Extract numeric ID from product ID (e.g., "KNUF_001" -> get from link)
+      const product = feedData.products.find(p => p.id === productId);
+      if (!product) {
+        throw new Error('Product niet gevonden');
+      }
+      
+      // Extract ID from link (e.g., "/product/1" -> 1)
+      const numericId = product.link.split('/').pop();
+      
+      const response = await fetch(`/api/products/${numericId}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Verwijderen mislukt');
+      }
+      
+      // Success - refresh feed data
+      setDeleteStatus('success');
+      setDeleteMessage(`✅ "${productTitle}" succesvol verwijderd!`);
+      
+      // Refresh the feed after a short delay
+      setTimeout(async () => {
+        await fetchFeedData();
+        setDeleteStatus(null);
+        setDeleteMessage('');
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Delete error:', error);
+      setDeleteStatus('error');
+      setDeleteMessage(`❌ Fout: ${error.message}`);
+      
+      // Clear error after 5 seconds
+      setTimeout(() => {
+        setDeleteStatus(null);
+        setDeleteMessage('');
+      }, 5000);
+    } finally {
+      setDeletingProductId(null);
+    }
   };
 
   const uploadToMerchantCenter = async () => {
@@ -63,7 +129,7 @@ const MerchantFeedPage = () => {
     setUploadMessage('');
     
     try {
-      const response = await fetch(`${API_URL}/api/feed/upload-to-merchant-center`, {
+      const response = await fetch(`/api/feed/upload-to-merchant-center`, {
         method: 'POST',
       });
       const data = await response.json();
@@ -264,9 +330,29 @@ const MerchantFeedPage = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
+                  {/* Delete Status Message */}
+                  {deleteStatus && (
+                    <div className={`mb-4 p-4 rounded-lg flex items-center gap-3 ${
+                      deleteStatus === 'success' 
+                        ? 'bg-green-100 border border-green-300' 
+                        : 'bg-red-100 border border-red-300'
+                    }`}>
+                      {deleteStatus === 'success' ? (
+                        <CheckCircle className="w-6 h-6 text-green-600" />
+                      ) : (
+                        <AlertCircle className="w-6 h-6 text-red-600" />
+                      )}
+                      <p className={`font-semibold ${
+                        deleteStatus === 'success' ? 'text-green-800' : 'text-red-800'
+                      }`}>
+                        {deleteMessage}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="space-y-4">
                     {feedData.products.map((product) => (
-                      <div key={product.id} className="flex items-start gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                      <div key={product.id} className="flex items-start gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors relative">
                         {/* Product Image */}
                         <div className="w-20 h-20 rounded-lg overflow-hidden bg-white border shrink-0">
                           <img 
@@ -279,7 +365,7 @@ const MerchantFeedPage = () => {
                         {/* Product Info */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-4">
-                            <div>
+                            <div className="flex-1">
                               <h3 className="font-semibold text-gray-900 line-clamp-1">{product.title}</h3>
                               <p className="text-sm text-gray-500 mt-1 line-clamp-2">{product.description}</p>
                             </div>
@@ -291,22 +377,45 @@ const MerchantFeedPage = () => {
                             </div>
                           </div>
                           
-                          {/* Tags */}
-                          <div className="flex flex-wrap gap-2 mt-3">
-                            <Badge variant="outline" className="text-xs">
-                              <Tag className="w-3 h-3 mr-1" />
-                              {product.id}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {product.brand}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {product.color}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              <ImageIcon className="w-3 h-3 mr-1" />
-                              {1 + (product.additional_image_links?.length || 0)} foto's
-                            </Badge>
+                          {/* Tags and Delete Button Row */}
+                          <div className="flex items-center justify-between gap-4 mt-3">
+                            <div className="flex flex-wrap gap-2">
+                              <Badge variant="outline" className="text-xs">
+                                <Tag className="w-3 h-3 mr-1" />
+                                {product.id}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {product.brand}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {product.color}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                <ImageIcon className="w-3 h-3 mr-1" />
+                                {1 + (product.additional_image_links?.length || 0)} foto's
+                              </Badge>
+                            </div>
+                            
+                            {/* Delete Button */}
+                            <Button
+                              onClick={() => handleDeleteProduct(product.id, product.title)}
+                              disabled={deletingProductId === product.id}
+                              variant="outline"
+                              size="sm"
+                              className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-400 shrink-0"
+                            >
+                              {deletingProductId === product.id ? (
+                                <>
+                                  <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
+                                  Verwijderen...
+                                </>
+                              ) : (
+                                <>
+                                  <Trash2 className="w-4 h-4 mr-1" />
+                                  Verwijder
+                                </>
+                              )}
+                            </Button>
                           </div>
                         </div>
                       </div>

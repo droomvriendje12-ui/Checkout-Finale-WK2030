@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
-import { products, benefits, features, videos, faqs } from '../mockData';
+import { useProducts } from '../context/ProductsContext';
+import { benefits, features, videos, faqs } from '../mockData';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -9,6 +10,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '..
 import { Star, ShoppingCart, Moon, Heart, Sparkles, Monitor, ShieldCheck, Truck, Award, Play, X, Plus, Minus, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import CartSidebar from '../components/CartSidebar';
 import Header from '../components/Header';
+import SchemaMarkup from '../components/SchemaMarkup';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination, Autoplay } from 'swiper/modules';
 import { trackViewItemList, trackSelectItem } from '../utils/analytics';
@@ -16,11 +18,11 @@ import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 const HomePage = () => {
   const navigate = useNavigate();
   const { cart, addToCart, removeFromCart, updateQuantity, getTotal, getItemCount, isCartOpen, setIsCartOpen } = useCart();
+  const { products, loading: productsLoading } = useProducts();
   const [reviews, setReviews] = useState([]);
   const [fiveStarReviews, setFiveStarReviews] = useState([]);
   const [reviewStats, setReviewStats] = useState({ total: 0, avgRating: 4.9 });
@@ -42,7 +44,7 @@ const HomePage = () => {
   useEffect(() => {
     const fetchReviews = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/reviews`);
+        const response = await fetch(`/api/reviews`);
         if (response.ok) {
           const data = await response.json();
           setReviews(data);
@@ -81,6 +83,9 @@ const HomePage = () => {
       {/* Shopping Cart Sidebar */}
       <CartSidebar />
       
+      {/* Schema Markup for AI SEO 2026 */}
+      <SchemaMarkup pageType="home" />
+      
       {/* Promo Banner - Warm Brown */}
       <div className="bg-warm-brown-500 text-white py-3 text-center">
         <p className="text-sm md:text-base font-medium tracking-wide">
@@ -114,7 +119,7 @@ const HomePage = () => {
               
               {/* Mobile Social Proof */}
               <div className="bg-white/90 rounded-xl p-3 mb-4 shadow-sm">
-                <p className="text-xs text-gray-500 text-center mb-1">Trusted by 10,000+ Parents</p>
+                <p className="text-xs text-gray-500 text-center mb-1">Vertrouwd door 500+ ouders</p>
                 <div className="flex items-center justify-center gap-2">
                   <div className="flex -space-x-1">
                     <img src="https://i.pravatar.cc/24?img=1" alt="" className="w-6 h-6 rounded-full border-2 border-white" />
@@ -165,9 +170,13 @@ const HomePage = () => {
           <div className="hidden md:flex items-center min-h-[600px] lg:min-h-[650px] px-6 lg:px-8">
             {/* Left Content */}
             <div className="w-1/2 pr-8 lg:pr-16">
-              {/* Urgency Badge */}
-              <div className="inline-flex items-center bg-warm-brown-50 text-warm-brown-700 px-4 py-2 rounded-full text-sm font-semibold mb-4 border border-warm-brown-100">
-                Trusted by 10,000+ Parents
+              {/* Trust Badge */}
+              <div className="inline-flex items-center gap-3 bg-white border-[1.5px] border-[#e8d5c4] rounded-xl px-5 py-3 mb-4">
+                <div className="text-[#c8833a] text-lg tracking-widest">★★★★★</div>
+                <div>
+                  <div className="font-bold text-[15px] text-[#2d1f14]">Vertrouwd door 500+ ouders</div>
+                  <div className="text-xs text-[#9c7b65]">Gemiddeld 4,9 / 5 sterren</div>
+                </div>
               </div>
               
               <h1 className="text-4xl lg:text-5xl xl:text-6xl font-extrabold text-slate-900 mb-4 leading-tight">

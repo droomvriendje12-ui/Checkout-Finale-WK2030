@@ -3,18 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { ShoppingCart, X, Plus, Minus, Truck, Loader2, Mail, Tag, Ticket, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShoppingCart, X, Plus, Minus, Truck, Loader2, Tag, Ticket, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { trackBeginCheckout, trackCheckoutClicked } from '../utils/analytics';
 import { products } from '../mockData';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 const CartSidebar = () => {
   const navigate = useNavigate();
   const { cart, removeFromCart, updateQuantity, getSubtotal, getDiscount, getTotal, getItemCount, isCartOpen, setIsCartOpen, appliedCoupon, setAppliedCoupon, addToCart } = useCart();
-  const [checkoutEmail, setCheckoutEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [emailError, setEmailError] = useState('');
   const crossSellRef = useRef(null);
   const [addedProducts, setAddedProducts] = useState({});
   
@@ -52,9 +49,44 @@ const CartSidebar = () => {
     }
   };
 
-  const validateEmail = (email) => {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
+  const handleCheckout = async () => {
+    setIsSubmitting(true);
+    
+    // GA4: Track begin_checkout (CONVERSION EVENT)
+    trackBeginCheckout(cart, '');
+    trackCheckoutClicked(cart, '');
+    
+    try {
+      // Send checkout started notification
+      const cartItems = cart.map(item => ({
+        name: item.shortName || item.name,
+        price: item.price,
+        quantity: item.quantity
+      }));
+      
+      await fetch(`/api/checkout-started`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cart_items: cartItems,
+          total_amount: getFinalTotal(),
+          session_id: localStorage.getItem('droomvriendjes_session') || null
+        }),
+      });
+      
+      // Navigate to checkout
+      setIsCartOpen(false);
+      navigate('/checkout');
+      
+    } catch (error) {
+      console.error('Checkout started error:', error);
+      setIsCartOpen(false);
+      navigate('/checkout');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleApplyDiscount = async () => {
@@ -68,7 +100,7 @@ const CartSidebar = () => {
     setCodeSuccess('');
     
     try {
-      const response = await fetch(`${API_URL}/api/discount/validate`, {
+      const response = await fetch(`/api/discount/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -108,63 +140,6 @@ const CartSidebar = () => {
     setDiscountCode('');
     setCodeSuccess('');
     localStorage.removeItem('droomvriendjes_coupon');
-  };
-
-  const handleCheckout = async () => {
-    // Validate email
-    if (!checkoutEmail.trim()) {
-      setEmailError('Vul je e-mailadres in');
-      return;
-    }
-    if (!validateEmail(checkoutEmail)) {
-      setEmailError('Ongeldig e-mailadres');
-      return;
-    }
-    
-    setEmailError('');
-    setIsSubmitting(true);
-    
-    // GA4: Track begin_checkout (CONVERSION EVENT)
-    trackBeginCheckout(cart, checkoutEmail);
-    trackCheckoutClicked(cart, checkoutEmail);
-    
-    try {
-      // Send checkout started notification
-      const cartItems = cart.map(item => ({
-        name: item.shortName || item.name,
-        price: item.price,
-        quantity: item.quantity
-      }));
-      
-      await fetch(`${API_URL}/api/checkout-started`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          customer_email: checkoutEmail,
-          cart_items: cartItems,
-          total_amount: getFinalTotal(),
-          session_id: localStorage.getItem('droomvriendjes_session') || null
-        }),
-      });
-      
-      // Store email for checkout page
-      localStorage.setItem('droomvriendjes_checkout_email', checkoutEmail);
-      
-      // Navigate to checkout
-      setIsCartOpen(false);
-      navigate('/checkout');
-      
-    } catch (error) {
-      console.error('Checkout started error:', error);
-      // Still proceed to checkout even if notification fails
-      localStorage.setItem('droomvriendjes_checkout_email', checkoutEmail);
-      setIsCartOpen(false);
-      navigate('/checkout');
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   // Calculate final total with coupon
@@ -412,28 +387,6 @@ const CartSidebar = () => {
                   </div>
                 </div>
               )}
-              
-              {/* Email input for checkout */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                  <Mail className="w-4 h-4" />
-                  E-mailadres voor bestelling *
-                </label>
-                <Input
-                  type="email"
-                  placeholder="je@email.nl"
-                  value={checkoutEmail}
-                  onChange={(e) => {
-                    setCheckoutEmail(e.target.value);
-                    setEmailError('');
-                  }}
-                  className={emailError ? 'border-red-500' : ''}
-                  data-testid="checkout-email-input"
-                />
-                {emailError && (
-                  <p className="text-red-500 text-sm">{emailError}</p>
-                )}
-              </div>
               
               <Button 
                 className="w-full bg-green-600 hover:bg-green-700 py-6 text-lg"

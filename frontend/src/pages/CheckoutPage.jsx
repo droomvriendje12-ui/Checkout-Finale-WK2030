@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
-import { ShoppingCart, CreditCard, Lock, Check, Truck, Heart, ArrowLeft, Loader2, Plus, Minus, Trash2, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react';
+import { trackCheckoutStart, trackAddressFilled, trackPaymentSelected } from '../lib/funnel';
+import { ShoppingCart, CreditCard, Lock, Check, Truck, Heart, ArrowLeft, Loader2, Plus, Minus, Trash2, ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
 import { trackBeginCheckout, trackAddPaymentInfo, trackAddShippingInfo } from '../utils/analytics';
 import { products } from '../mockData';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
@@ -16,6 +16,7 @@ const CheckoutPage = () => {
   const hasTrackedRef = useRef(false);
   const [addedProducts, setAddedProducts] = useState({});
   const crossSellRef = useRef(null);
+  const formRef = useRef(null);
   
   const [formData, setFormData] = useState({
     email: '',
@@ -24,15 +25,20 @@ const CheckoutPage = () => {
     address: '',
     city: '',
     zipCode: '',
+    houseNumber: '',
     phone: '',
-    comment: '',
+    giftWrap: false,
     paymentMethod: 'ideal'
   });
 
-  // GA4: Track begin_checkout when page loads
+  const [addressLoading, setAddressLoading] = useState(false);
+  const [addressFound, setAddressFound] = useState(null);
+  const addressTimeoutRef = useRef(null);
+
+  // Track checkout start when page loads
   useEffect(() => {
     if (cart.length > 0) {
-      trackBeginCheckout(cart);
+      trackCheckoutStart(getSubtotal());
     }
   }, []);
 
@@ -58,7 +64,7 @@ const CheckoutPage = () => {
     if (!email || cart.length === 0) return;
     
     try {
-      await fetch(`${API_URL}/api/email/track-checkout`, {
+      await fetch(`/api/email/track-checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -80,6 +86,40 @@ const CheckoutPage = () => {
     }
   };
 
+  // Auto-fill address from postcode + huisnummer via PDOK
+  const lookupAddress = useCallback(async (zipCode, houseNumber) => {
+    const pc = zipCode.replace(/\s/g, '');
+    if (pc.length < 4) return;
+    
+    setAddressLoading(true);
+    setAddressFound(null);
+    try {
+      const params = new URLSearchParams({ postcode: pc });
+      if (houseNumber) params.append('huisnummer', houseNumber);
+      const res = await fetch(`/api/address/lookup?${params}`);
+      if (!res.ok) {
+        setAddressLoading(false);
+        return;
+      }
+      const data = await res.json();
+      if (data.found) {
+        setFormData(prev => ({
+          ...prev,
+          address: data.straat + (houseNumber ? ` ${houseNumber}` : ''),
+          city: data.stad,
+        }));
+        setAddressFound(true);
+        trackAddressFilled(formData.email);
+      } else {
+        setAddressFound(false);
+      }
+    } catch {
+      setAddressFound(false);
+    } finally {
+      setAddressLoading(false);
+    }
+  }, []);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -94,11 +134,21 @@ const CheckoutPage = () => {
         trackCheckoutSession(value, fullName);
       }, 2000);
     }
+
+    // Trigger address lookup when postcode or house number changes
+    if (name === 'zipCode' || name === 'houseNumber') {
+      if (addressTimeoutRef.current) clearTimeout(addressTimeoutRef.current);
+      const newZip = name === 'zipCode' ? value : formData.zipCode;
+      const newHouse = name === 'houseNumber' ? value : formData.houseNumber;
+      if (newZip.replace(/\s/g, '').length >= 4) {
+        addressTimeoutRef.current = setTimeout(() => lookupAddress(newZip, newHouse), 400);
+      }
+    }
   };
 
   const handlePaymentMethodChange = (value) => {
     setFormData(prev => ({ ...prev, paymentMethod: value }));
-    trackAddPaymentInfo(cart, value);
+    trackPaymentSelected(value);
   };
 
   const handleSubmit = async (e) => {
@@ -123,7 +173,7 @@ const CheckoutPage = () => {
       trackAddShippingInfo(cart, 'standard_shipping');
       
       // Notify backend of checkout start
-      await fetch(`${API_URL}/api/checkout-started`, {
+      await fetch(`/api/checkout-started`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -138,9 +188,10 @@ const CheckoutPage = () => {
       const subtotal = getSubtotal();
       const autoDiscount = getDiscount(); // 2nd item 50% off
       const couponDiscount = appliedCoupon ? appliedCoupon.discount_amount : 0;
-      const finalTotal = Math.max(0, subtotal - autoDiscount - couponDiscount);
+      const giftWrapCost = formData.giftWrap ? GIFT_WRAP_PRICE : 0;
+      const finalTotal = Math.max(0, subtotal - autoDiscount - couponDiscount + giftWrapCost);
       
-      const orderResponse = await fetch(`${API_URL}/api/orders`, {
+      const orderResponse = await fetch(`/api/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -150,7 +201,8 @@ const CheckoutPage = () => {
           customer_address: formData.address,
           customer_city: formData.city,
           customer_zipcode: formData.zipCode,
-          customer_comment: formData.comment || '',
+          customer_comment: formData.giftWrap ? 'Cadeauverpakking gewenst' : '',
+          gift_wrap: formData.giftWrap,
           items: cart.map(item => ({
             product_id: String(item.id),
             product_name: item.shortName || item.name,
@@ -173,7 +225,7 @@ const CheckoutPage = () => {
       const orderData = await orderResponse.json();
 
       // Create payment via backend (SECURE - no API key in frontend!)
-      const paymentResponse = await fetch(`${API_URL}/api/payments/create`, {
+      const paymentResponse = await fetch(`/api/payments/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -203,12 +255,19 @@ const CheckoutPage = () => {
   };
 
   const paymentMethods = [
-    { value: 'ideal', label: 'iDEAL', icon: '🏦', popular: true, description: 'Direct via je bank' },
-    { value: 'creditcard', label: 'Creditcard', icon: '💳', description: 'Visa, Mastercard, Amex' },
-    { value: 'in3', label: 'iDEAL in3', icon: '3️⃣', description: 'Betaal in 3 termijnen' },
-    { value: 'applepay', label: 'Apple Pay', icon: '🍎', description: 'Snel & veilig' },
-    { value: 'bancontact', label: 'Bancontact', icon: '🇧🇪', description: 'Voor België' },
+    { value: 'ideal', label: 'iDEAL', icon: 'https://www.mollie.com/external/icons/payment-methods/ideal.svg', popular: true, description: 'Direct via je bank' },
+    { value: 'creditcard', label: 'Creditcard', icon: 'https://www.mollie.com/external/icons/payment-methods/creditcard.svg', description: 'Visa, Mastercard, Amex' },
+    { value: 'in3', label: 'iDEAL in3', icon: 'https://www.mollie.com/external/icons/payment-methods/in3.svg', description: 'Betaal in 3 termijnen' },
+    { value: 'bancontact', label: 'Bancontact', icon: 'https://www.mollie.com/external/icons/payment-methods/bancontact.svg', description: 'Voor Belgie' },
+    { value: 'paypal', label: 'PayPal', icon: 'https://www.mollie.com/external/icons/payment-methods/paypal.svg', description: 'Betaal met PayPal' },
   ];
+
+  const expressMethods = [
+    { value: 'applepay', label: 'Apple Pay', icon: 'https://www.mollie.com/external/icons/payment-methods/applepay.svg' },
+  ];
+
+  // Gift wrap price
+  const GIFT_WRAP_PRICE = 3.00;
 
   // Get cross-sell products (exclude items already in cart)
   const cartProductIds = cart.map(item => item.id);
@@ -260,8 +319,9 @@ const CheckoutPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-cream py-6 px-4">
-      <div className="max-w-7xl mx-auto">
+    <>
+    <div className="min-h-screen bg-cream py-4 sm:py-6" style={{maxWidth: '100vw', overflowX: 'hidden'}}>
+      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8" style={{maxWidth: '100%'}}>
         {/* Header */}
         <div className="text-center mb-6">
           <Link to="/" className="inline-block mb-4">
@@ -291,131 +351,322 @@ const CheckoutPage = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="grid lg:grid-cols-3 gap-8">
+        <form onSubmit={handleSubmit} ref={formRef}>
+          <div className="grid lg:grid-cols-3 gap-4 sm:gap-8">
             {/* Left Column - Form */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+              
+              {/* Express Checkout */}
+              <div className="bg-white rounded-2xl shadow-sm sm:shadow-lg p-4 sm:p-6" data-testid="express-checkout">
+                <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Snel Betalen</h2>
+                <div className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3">
+                  {/* Apple Pay */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handlePaymentMethodChange('applepay');
+                      if (formData.email && formData.firstName && formData.lastName && formData.address && formData.zipCode && formData.city) {
+                        formRef.current?.requestSubmit();
+                      } else {
+                        setError('Vul eerst alle verplichte velden in voordat je Apple Pay gebruikt');
+                        window.scrollTo({ top: 400, behavior: 'smooth' });
+                      }
+                    }}
+                    className="flex-1 max-w-[280px] flex items-center justify-center gap-2 py-3.5 px-5 bg-black text-white rounded-xl font-semibold hover:bg-gray-900 transition-all min-h-[48px]"
+                    data-testid="express-applepay"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="20" viewBox="0 0 814 1000" fill="white">
+                      <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105.6-57.4-155.5-127.4C34.5 764.6 0 618.3 0 479.1 0 306.9 100.5 214.9 199.7 214.9c66.5 0 121.7 43.6 163.3 43.6 39.5 0 101.1-46.2 176.6-46.2 28.5 0 130.9 2.6 198.3 99.2l.2.3-.1-.1 50.1 29.2z"/>
+                      <path d="M554.1 0c-26.5 82.1-96.8 142.6-168.5 142.6-8.5 0-17-1.3-23.5-2.6 6.5-33.8 28.5-73.2 57.4-100.4C449.7 7.8 509.4-4.6 554.1 0z"/>
+                    </svg>
+                    <span className="text-sm font-semibold">Pay</span>
+                  </button>
+
+                  {/* Google Pay */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handlePaymentMethodChange('googlepay');
+                      if (formData.email && formData.firstName && formData.lastName && formData.address && formData.zipCode && formData.city) {
+                        formRef.current?.requestSubmit();
+                      } else {
+                        setError('Vul eerst alle verplichte velden in voordat je Google Pay gebruikt');
+                        window.scrollTo({ top: 400, behavior: 'smooth' });
+                      }
+                    }}
+                    className="flex-1 max-w-[280px] flex items-center justify-center gap-2 py-3.5 px-5 bg-white border-2 border-slate-200 text-slate-800 rounded-xl font-semibold hover:border-slate-300 hover:bg-slate-50 transition-all min-h-[48px]"
+                    data-testid="express-googlepay"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 48 48">
+                      <path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                      <path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                      <path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                    </svg>
+                    <span className="text-sm font-semibold">Pay</span>
+                  </button>
+
+                  {/* PayPal */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handlePaymentMethodChange('paypal');
+                      if (formData.email && formData.firstName && formData.lastName && formData.address && formData.zipCode && formData.city) {
+                        formRef.current?.requestSubmit();
+                      } else {
+                        setError('Vul eerst alle verplichte velden in voordat je PayPal gebruikt');
+                        window.scrollTo({ top: 400, behavior: 'smooth' });
+                      }
+                    }}
+                    className="flex-1 max-w-[280px] flex items-center justify-center py-3.5 px-5 bg-[#FFC439] rounded-xl hover:bg-[#f0b82e] transition-all min-h-[48px]"
+                    data-testid="express-paypal"
+                  >
+                    <img src="https://www.paypalobjects.com/webstatic/mktg/Logo/pp-logo-200px.png" alt="PayPal" className="h-6" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-3 mt-4">
+                  <div className="flex-1 h-px bg-slate-200" />
+                  <span className="text-[11px] text-slate-400 uppercase font-semibold whitespace-nowrap">of vul je gegevens in</span>
+                  <div className="flex-1 h-px bg-slate-200" />
+                </div>
+              </div>
+
               {/* Contact Info */}
-              <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
+              <div className="bg-white rounded-2xl shadow-sm sm:shadow-lg p-4 sm:p-6">
                 <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
                   <Lock className="w-5 h-5 text-warm-brown-500" />
                   Contactgegevens
                 </h2>
-                <input
-                  type="email"
-                  name="email"
-                  placeholder="E-mailadres *"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full p-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none transition"
-                />
+                <div className="relative">
+                  <input
+                    type="email"
+                    name="email"
+                    id="email"
+                    placeholder=" "
+                    inputMode="email"
+                    autoComplete="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    required
+                    className="peer w-full min-h-[48px] pt-5 pb-2 px-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none transition"
+                    data-testid="checkout-email"
+                  />
+                  <label htmlFor="email" className="absolute left-4 top-1 text-[11px] text-warm-brown-500 font-semibold peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:text-slate-400 peer-placeholder-shown:font-normal transition-all pointer-events-none">
+                    E-mailadres *
+                  </label>
+                </div>
               </div>
 
-              {/* Shipping Address */}
-              <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
+              {/* Shipping Address with Auto-fill */}
+              <div className="bg-white rounded-2xl shadow-sm sm:shadow-lg p-4 sm:p-6">
                 <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
                   <Truck className="w-5 h-5 text-warm-brown-500" />
                   Verzendadres
                 </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <input
-                    type="text"
-                    name="firstName"
-                    placeholder="Voornaam *"
-                    value={formData.firstName}
-                    onChange={handleInputChange}
-                    required
-                    className="p-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none transition"
-                  />
-                  <input
-                    type="text"
-                    name="lastName"
-                    placeholder="Achternaam *"
-                    value={formData.lastName}
-                    onChange={handleInputChange}
-                    required
-                    className="p-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none transition"
-                  />
-                  <input
-                    type="text"
-                    name="address"
-                    placeholder="Adres + huisnummer *"
-                    value={formData.address}
-                    onChange={handleInputChange}
-                    required
-                    className="sm:col-span-2 p-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none transition"
-                  />
-                  <input
-                    type="text"
-                    name="zipCode"
-                    placeholder="Postcode *"
-                    value={formData.zipCode}
-                    onChange={handleInputChange}
-                    required
-                    className="p-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none transition"
-                  />
-                  <input
-                    type="text"
-                    name="city"
-                    placeholder="Plaats *"
-                    value={formData.city}
-                    onChange={handleInputChange}
-                    required
-                    className="p-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none transition"
-                  />
+
+                {/* Postcode + Huisnummer - triggers auto-fill */}
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="zipCode"
+                      id="zipCode"
+                      placeholder=" "
+                      inputMode="text"
+                      autoComplete="postal-code"
+                      value={formData.zipCode}
+                      onChange={handleInputChange}
+                      required
+                      className="peer w-full min-h-[48px] pt-5 pb-2 px-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none transition"
+                      data-testid="checkout-zipcode"
+                    />
+                    <label htmlFor="zipCode" className="absolute left-4 top-1 text-[11px] text-warm-brown-500 font-semibold peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:text-slate-400 peer-placeholder-shown:font-normal transition-all pointer-events-none">
+                      Postcode *
+                    </label>
+                    {addressLoading && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <Loader2 className="w-4 h-4 text-warm-brown-500 animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="houseNumber"
+                      id="houseNumber"
+                      placeholder=" "
+                      inputMode="numeric"
+                      value={formData.houseNumber}
+                      onChange={handleInputChange}
+                      className="peer w-full min-h-[48px] pt-5 pb-2 px-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none transition"
+                      data-testid="checkout-housenumber"
+                    />
+                    <label htmlFor="houseNumber" className="absolute left-4 top-1 text-[11px] text-warm-brown-500 font-semibold peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:text-slate-400 peer-placeholder-shown:font-normal transition-all pointer-events-none">
+                      Huisnr.
+                    </label>
+                  </div>
+                </div>
+
+                {/* Address found feedback */}
+                {addressFound === true && (
+                  <div className="flex items-center gap-2 text-green-600 text-sm mb-3 px-1 animate-fadeIn" data-testid="address-found">
+                    <MapPin className="w-4 h-4" />
+                    <span>{formData.address}, {formData.city}</span>
+                  </div>
+                )}
+                {addressFound === false && formData.zipCode.replace(/\s/g, '').length >= 6 && (
+                  <p className="text-amber-600 text-sm mb-3 px-1" data-testid="address-not-found">Adres niet gevonden, vul handmatig in</p>
+                )}
+
+                {/* Auto-filled or manual street + city */}
+                <div className="space-y-3">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="address"
+                      id="address"
+                      placeholder=" "
+                      autoComplete="street-address"
+                      value={formData.address}
+                      onChange={handleInputChange}
+                      required
+                      className="peer w-full min-h-[48px] pt-5 pb-2 px-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none transition"
+                      data-testid="checkout-address"
+                    />
+                    <label htmlFor="address" className="absolute left-4 top-1 text-[11px] text-warm-brown-500 font-semibold peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:text-slate-400 peer-placeholder-shown:font-normal transition-all pointer-events-none">
+                      Straat + huisnummer *
+                    </label>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="city"
+                      id="city"
+                      placeholder=" "
+                      autoComplete="address-level2"
+                      value={formData.city}
+                      onChange={handleInputChange}
+                      required
+                      className="peer w-full min-h-[48px] pt-5 pb-2 px-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none transition"
+                      data-testid="checkout-city"
+                    />
+                    <label htmlFor="city" className="absolute left-4 top-1 text-[11px] text-warm-brown-500 font-semibold peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:text-slate-400 peer-placeholder-shown:font-normal transition-all pointer-events-none">
+                      Plaats *
+                    </label>
+                  </div>
+                </div>
+
+                {/* Name fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="firstName"
+                      id="firstName"
+                      placeholder=" "
+                      autoComplete="given-name"
+                      value={formData.firstName}
+                      onChange={handleInputChange}
+                      required
+                      className="peer w-full min-h-[48px] pt-5 pb-2 px-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none transition"
+                      data-testid="checkout-firstname"
+                    />
+                    <label htmlFor="firstName" className="absolute left-4 top-1 text-[11px] text-warm-brown-500 font-semibold peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:text-slate-400 peer-placeholder-shown:font-normal transition-all pointer-events-none">
+                      Voornaam *
+                    </label>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="lastName"
+                      id="lastName"
+                      placeholder=" "
+                      autoComplete="family-name"
+                      value={formData.lastName}
+                      onChange={handleInputChange}
+                      required
+                      className="peer w-full min-h-[48px] pt-5 pb-2 px-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none transition"
+                      data-testid="checkout-lastname"
+                    />
+                    <label htmlFor="lastName" className="absolute left-4 top-1 text-[11px] text-warm-brown-500 font-semibold peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:text-slate-400 peer-placeholder-shown:font-normal transition-all pointer-events-none">
+                      Achternaam *
+                    </label>
+                  </div>
+                </div>
+
+                {/* Phone */}
+                <div className="relative mt-3">
                   <input
                     type="tel"
                     name="phone"
-                    placeholder="Telefoonnummer (optioneel)"
+                    id="phone"
+                    placeholder=" "
+                    inputMode="tel"
+                    autoComplete="tel"
                     value={formData.phone}
                     onChange={handleInputChange}
-                    className="sm:col-span-2 p-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none transition"
+                    className="peer w-full min-h-[48px] pt-5 pb-2 px-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none transition"
+                    data-testid="checkout-phone"
                   />
+                  <label htmlFor="phone" className="absolute left-4 top-1 text-[11px] text-warm-brown-500 font-semibold peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:text-slate-400 peer-placeholder-shown:font-normal transition-all pointer-events-none">
+                    Telefoonnummer (optioneel)
+                  </label>
                 </div>
               </div>
 
-              {/* Comments/Special Requests */}
-              <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
-                <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-warm-brown-500" />
-                  Opmerkingen
-                </h2>
-                <textarea
-                  name="comment"
-                  placeholder="Heb je een speciale wens of opmerking? (bijvoorbeeld: cadeauverpakking, bezorgmoment, persoonlijk bericht)"
-                  value={formData.comment}
-                  onChange={handleInputChange}
-                  rows="4"
-                  className="w-full p-4 text-base border-2 border-slate-200 rounded-xl focus:border-warm-brown-500 focus:outline-none resize-none transition"
-                />
-                <p className="text-xs sm:text-sm text-slate-500 mt-2 flex items-center gap-1">
-                  <Heart className="w-3 h-3 sm:w-4 sm:h-4 text-warm-brown-400" />
-                  Optioneel - We doen ons best om aan je wensen te voldoen!
-                </p>
+              {/* Gift Wrap Checkbox (replaces opmerkingen) */}
+              <div className="bg-white rounded-2xl shadow-sm sm:shadow-lg p-4 sm:p-6">
+                <label 
+                  className="flex items-center gap-4 cursor-pointer group"
+                  data-testid="gift-wrap-option"
+                >
+                  <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${
+                    formData.giftWrap 
+                      ? 'bg-warm-brown-500 border-warm-brown-500' 
+                      : 'border-slate-300 group-hover:border-warm-brown-400'
+                  }`}>
+                    {formData.giftWrap && <Check className="w-4 h-4 text-white" />}
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={formData.giftWrap}
+                    onChange={(e) => setFormData(prev => ({ ...prev, giftWrap: e.target.checked }))}
+                    className="sr-only"
+                  />
+                  <div className="flex-1">
+                    <span className="font-semibold text-slate-800">Cadeauverpakking</span>
+                    <span className="text-warm-brown-600 font-bold ml-2">(+ EUR 3,00)</span>
+                    <p className="text-sm text-slate-500 mt-0.5">Mooi ingepakt met strik en kaartje</p>
+                  </div>
+                </label>
               </div>
 
-              {/* Payment Methods */}
-              <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
+              {/* Payment Methods - Compact Radio List */}
+              <div className="bg-white rounded-2xl shadow-sm sm:shadow-lg p-4 sm:p-6">
                 <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
                   <CreditCard className="w-5 h-5 text-warm-brown-500" />
                   Betaalmethode
                 </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="space-y-2" data-testid="payment-methods-list">
                   {paymentMethods.map(method => (
                     <label 
                       key={method.value} 
-                      className={`relative flex flex-col items-center p-5 border-2 rounded-xl cursor-pointer hover:border-warm-brown-400 transition ${
+                      className={`flex items-center gap-3 p-3 sm:p-4 border-2 rounded-xl cursor-pointer transition-all ${
                         formData.paymentMethod === method.value 
-                          ? 'border-warm-brown-500 bg-warm-brown-50 shadow-md' 
-                          : 'border-slate-200 hover:bg-slate-50'
+                          ? 'border-warm-brown-500 bg-warm-brown-50' 
+                          : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                       }`}
+                      data-testid={`payment-method-${method.value}`}
                     >
-                      {method.popular && (
-                        <span className="absolute -top-2 -right-2 bg-warm-brown-500 text-white text-xs px-2 py-1 rounded-full font-semibold">
-                          Populair
-                        </span>
-                      )}
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                        formData.paymentMethod === method.value 
+                          ? 'border-warm-brown-500' 
+                          : 'border-slate-300'
+                      }`}>
+                        {formData.paymentMethod === method.value && (
+                          <div className="w-2.5 h-2.5 rounded-full bg-warm-brown-500" />
+                        )}
+                      </div>
                       <input
                         type="radio"
                         name="paymentMethod"
@@ -424,23 +675,30 @@ const CheckoutPage = () => {
                         onChange={() => handlePaymentMethodChange(method.value)}
                         className="sr-only"
                       />
-                      <span className="text-4xl mb-2">{method.icon}</span>
-                      <span className="font-semibold text-slate-700 text-base">{method.label}</span>
-                      <span className="text-sm text-slate-500 text-center mt-1">{method.description}</span>
+                      <img src={method.icon} alt={method.label} className="w-8 h-6 object-contain flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-800 text-sm sm:text-base">{method.label}</span>
+                          {method.popular && (
+                            <span className="bg-warm-brown-500 text-white text-[10px] px-2 py-0.5 rounded-full font-semibold">Populair</span>
+                          )}
+                        </div>
+                        <span className="text-xs sm:text-sm text-slate-500">{method.description}</span>
+                      </div>
                     </label>
                   ))}
                 </div>
                 
                 {/* Payment Security Badge */}
-                <div className="mt-4 flex items-center justify-center gap-2 text-sm text-slate-600 bg-green-50 p-4 rounded-xl">
+                <div className="mt-4 flex items-center justify-center gap-2 text-sm text-slate-600 bg-green-50 p-3 rounded-xl">
                   <Lock className="w-4 h-4 text-green-600" />
-                  <span className="text-center">Veilige betaling via Mollie - SSL versleuteld</span>
+                  <span>Veilige betaling via Mollie - SSL versleuteld</span>
                 </div>
               </div>
             </div>
 
             {/* Right Column - Order Summary */}
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-1 overflow-hidden">
               <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6 lg:sticky lg:top-6">
                 <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-4 sm:mb-6 flex items-center gap-2">
                   <ShoppingCart className="w-5 h-5 text-warm-brown-500" />
@@ -591,6 +849,12 @@ const CheckoutPage = () => {
                       <span className="font-semibold">-€{appliedCoupon.discount_amount.toFixed(2).replace('.', ',')}</span>
                     </div>
                   )}
+                  {formData.giftWrap && (
+                    <div className="flex justify-between text-slate-700">
+                      <span>Cadeauverpakking</span>
+                      <span className="font-semibold">€{GIFT_WRAP_PRICE.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-slate-600">Verzending</span>
                     <span className="font-semibold text-green-600">GRATIS</span>
@@ -600,14 +864,15 @@ const CheckoutPage = () => {
                 {/* Total */}
                 <div className="flex justify-between text-xl sm:text-2xl font-bold mb-6 pt-4 border-t-2 border-warm-brown-100">
                   <span>Totaal</span>
-                  <span className="text-warm-brown-600">€{(Math.max(0, getTotal() - (appliedCoupon ? appliedCoupon.discount_amount : 0))).toFixed(2).replace('.', ',')}</span>
+                  <span className="text-warm-brown-600">€{(Math.max(0, getTotal() - (appliedCoupon ? appliedCoupon.discount_amount : 0) + (formData.giftWrap ? GIFT_WRAP_PRICE : 0))).toFixed(2).replace('.', ',')}</span>
                 </div>
 
-                {/* Submit Button */}
+                {/* Submit Button - visible on desktop */}
                 <button
                   type="submit"
+                  id="checkout-form-submit"
                   disabled={isLoading}
-                  className="w-full bg-warm-brown-500 text-white py-5 sm:py-6 rounded-xl font-bold text-lg sm:text-xl hover:bg-warm-brown-600 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="hidden lg:flex w-full bg-warm-brown-500 text-white py-5 sm:py-6 rounded-xl font-bold text-lg sm:text-xl hover:bg-warm-brown-600 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed items-center justify-center gap-2"
                   data-testid="checkout-submit-button"
                 >
                   {isLoading ? (
@@ -618,7 +883,7 @@ const CheckoutPage = () => {
                   ) : (
                     <>
                       <Lock className="w-5 h-5 sm:w-6 sm:h-6" />
-                      <span>Veilig betalen €{(Math.max(0, getTotal() - (appliedCoupon ? appliedCoupon.discount_amount : 0))).toFixed(2).replace('.', ',')}</span>
+                      <span>Veilig betalen €{(Math.max(0, getTotal() - (appliedCoupon ? appliedCoupon.discount_amount : 0) + (formData.giftWrap ? GIFT_WRAP_PRICE : 0))).toFixed(2).replace('.', ',')}</span>
                     </>
                   )}
                 </button>
@@ -642,10 +907,36 @@ const CheckoutPage = () => {
                     algemene voorwaarden
                   </Link>
                 </p>
+
+                {/* Mobile-only "Betaal nu" button - visible in the gap before trust section */}
+                <button
+                  type="button"
+                  onClick={() => formRef.current?.requestSubmit()}
+                  disabled={isLoading}
+                  className="lg:hidden w-full mt-5 py-4 bg-warm-brown-500 text-white rounded-xl font-bold text-lg hover:bg-warm-brown-600 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  data-testid="mobile-betaal-nu-btn"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Verwerken...
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-5 h-5" />
+                      Betaal nu
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>
+
+          {/* Sticky bar moved outside - see below */}
         </form>
+
+        {/* Bottom padding for sticky bar on mobile */}
+        <div className="h-16 lg:hidden" />
 
         {/* Trust Section - Enhanced */}
         <div className="mt-8 lg:mt-12">
@@ -735,10 +1026,35 @@ const CheckoutPage = () => {
           <img src="https://www.mollie.com/external/icons/payment-methods/creditcard.svg" alt="Creditcard" className="h-8" />
           <img src="https://www.mollie.com/external/icons/payment-methods/paypal.svg" alt="PayPal" className="h-8" />
           <img src="https://www.mollie.com/external/icons/payment-methods/applepay.svg" alt="Apple Pay" className="h-8" />
+          <img src="https://www.mollie.com/external/icons/payment-methods/googlepay.svg" alt="Google Pay" className="h-8" />
           <img src="https://www.mollie.com/external/icons/payment-methods/bancontact.svg" alt="Bancontact" className="h-8" />
         </div>
       </div>
     </div>
+
+      {/* Sticky Mobile Payment Bar - outside overflow container for proper fixed positioning */}
+      <div className="fixed bottom-0 left-0 right-0 lg:hidden bg-warm-brown-500" style={{zIndex: 9999, boxShadow: '0 -4px 20px rgba(0,0,0,0.15)'}} data-testid="sticky-payment-bar">
+        <button
+          type="button"
+          disabled={isLoading}
+          onClick={() => formRef.current?.requestSubmit()}
+          className="w-full flex items-center justify-center gap-2 py-4 px-6 text-white font-bold text-lg disabled:opacity-50"
+          data-testid="sticky-payment-button"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Verwerken...</span>
+            </>
+          ) : (
+            <>
+              <Lock className="w-5 h-5" />
+              <span>Veilig betalen €{(Math.max(0, getTotal() - (appliedCoupon ? appliedCoupon.discount_amount : 0) + (formData.giftWrap ? GIFT_WRAP_PRICE : 0))).toFixed(2).replace('.', ',')}</span>
+            </>
+          )}
+        </button>
+      </div>
+    </>
   );
 };
 

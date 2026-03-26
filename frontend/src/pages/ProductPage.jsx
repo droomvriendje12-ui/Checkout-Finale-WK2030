@@ -1,22 +1,24 @@
-import React, { useMemo, useEffect, useState, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { products, faqs } from '../mockData';
+import React, { useMemo, useEffect, useState, useRef, useCallback } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useProducts } from '../context/ProductsContext';
+import { faqs } from '../mockData';
 import { useCart } from '../context/CartContext';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../components/ui/accordion';
 import { Input } from '../components/ui/input';
-import { Star, ShoppingCart, Check, Sparkles, Shield, ChevronLeft, ChevronRight, Send, User, MessageSquare } from 'lucide-react';
+import { Star, ShoppingCart, Check, Sparkles, Shield, ChevronLeft, ChevronRight, Send, User, MessageSquare, Camera } from 'lucide-react';
 import Layout from '../components/Layout';
 import StickyAddToCart from '../components/StickyAddToCart';
 import { trackViewItem } from '../utils/analytics';
+import { trackProductView, trackAddToCart } from '../lib/funnel';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 const ProductPage = () => {
   const { id } = useParams();
   const { addToCart, setIsCartOpen, isCartOpen } = useCart();
+  const { products } = useProducts();
   const [selectedImage, setSelectedImage] = useState(0);
   const [productReviews, setProductReviews] = useState([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
@@ -28,11 +30,15 @@ const ProductPage = () => {
     email: '',
     rating: 5,
     title: '',
-    text: ''
+    text: '',
+    photo_url: null
   });
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [reviewError, setReviewError] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const fileInputRef = useRef(null);
   
   // Carousel state for "Andere Knuffels"
   const [carouselIndex, setCarouselIndex] = useState(0);
@@ -42,8 +48,113 @@ const ProductPage = () => {
   const [scrollLeft, setScrollLeft] = useState(0);
   
   const product = useMemo(() => {
-    return products.find(p => p.id === parseInt(id));
-  }, [id]);
+    // Support both UUID strings and numeric IDs
+    return products.find(p => String(p.id) === String(id));
+  }, [id, products]);
+
+  // Determine product series for dynamic specs
+  const productSeries = useMemo(() => {
+    if (!product) return 'basic';
+    
+    // AI Intelligent Serie (USB-C Oplaadbaar): FM666-61, FM666-62, FM666-67
+    const aiSerieSkus = ['FM666-61', 'FM666-62', 'FM666-67'];
+    if (aiSerieSkus.includes(product.sku)) {
+      return 'ai';
+    }
+    
+    // Nodding Off Serie (Batterijen): FM666-77, FM666-78, FM666-80, FM666-81, FM666-82, FM666-74
+    const noddingOffSkus = ['FM666-77', 'FM666-78', 'FM666-80', 'FM666-81', 'FM666-82', 'FM666-74'];
+    if (noddingOffSkus.includes(product.sku)) {
+      return 'nodding';
+    }
+    
+    // Also check by description/features for products without matching SKU
+    const desc = (product.description || '').toLowerCase();
+    const features = (product.features || []).join(' ').toLowerCase();
+    
+    if (desc.includes('usb-c') || features.includes('usb-c')) {
+      return 'ai';
+    }
+    if (desc.includes('60 melodieën') || desc.includes('60 slaapliedjes') || 
+        features.includes('60 slaapliedjes') || features.includes('nodding off')) {
+      return 'nodding';
+    }
+    
+    return 'basic';
+  }, [product]);
+
+  // Dynamic specifications - use database specs if available, otherwise fallback to hardcoded
+  const productSpecs = useMemo(() => {
+    // First check if product has specs from database
+    if (product?.specs && Object.keys(product.specs).length > 0) {
+      const dbSpecs = product.specs;
+      return {
+        projection: dbSpecs.projection || '',
+        audio: dbSpecs.audio || '',
+        power: dbSpecs.power || '',
+        timer: dbSpecs.timer || '',
+        tipText: dbSpecs.tipText || ''
+      };
+    }
+    
+    // Fallback to hardcoded specs based on product series
+    if (productSeries === 'ai') {
+      return {
+        projection: '3-in-1 (Sterren, Oceaan, Lamp)',
+        audio: '10 Slaapliedjes + 5 White Noise',
+        power: 'USB-C Oplaadbaar (Kabel incl.)',
+        timer: '30 minuten Auto-uit',
+        tipText: 'Oplaadbare batterijen zijn niet nodig, omdat deze Droomvriend volledig oplaadbaar is via USB-C. De module heeft een ingebouwde timer van 30 minuten voor optimaal energieverbruik.'
+      };
+    }
+    if (productSeries === 'nodding') {
+      return {
+        projection: '7 Lichtmodi + 3 Kappen (Sterren, Oceaan, Lamp)',
+        audio: '60 Slaapliedjes + 6 White Noise',
+        power: '3x AA Batterijen (Niet inbegrepen)',
+        timer: '30 minuten Auto-uit',
+        tipText: 'De Nodding Off functie creëert een kalmerende knikkende beweging die je baby helpt ontspannen. De batterijen gaan lang mee dankzij de auto-uit timer van 30 minuten.'
+      };
+    }
+    // Basic serie
+    return {
+      projection: 'Sterrenhemel & Oceaan Projectie',
+      audio: '10 Rustgevende Melodieën',
+      power: '3x AA Batterijen (Niet inbegrepen)',
+      timer: '30 minuten Auto-uit',
+      tipText: 'De batterijen gaan lang mee dankzij de auto-uit timer van 30 minuten. Ideaal voor een rustige nacht zonder zorgen over energieverbruik.'
+    };
+  }, [product, productSeries]);
+
+  // Quick features from database or fallback
+  const quickFeatures = useMemo(() => {
+    if (product?.quickFeatures && product.quickFeatures.length > 0) {
+      return product.quickFeatures;
+    }
+    // Fallback based on product series
+    if (productSeries === 'ai') {
+      return [
+        { icon: '🤖', label: 'AI Huilsensor' },
+        { icon: '🔌', label: 'USB-C Oplaadbaar' },
+        { icon: '🎵', label: '10 Melodieën + 5 White Noise' },
+        { icon: '✩', label: '3-in-1 Projectie' }
+      ];
+    }
+    if (productSeries === 'nodding') {
+      return [
+        { icon: '😴', label: 'Nodding Off Functie' },
+        { icon: '🔆', label: '7 Lichtmodi' },
+        { icon: '🎵', label: '60 Slaapliedjes' },
+        { icon: '⏰', label: 'Automatische timer' }
+      ];
+    }
+    return [
+      { icon: '⭐', label: 'Sterrenprojectie' },
+      { icon: '🎵', label: '10 Melodieën' },
+      { icon: '🔇', label: 'White Noise' },
+      { icon: '⏰', label: 'Auto-uit Timer' }
+    ];
+  }, [product, productSeries]);
 
   // Create gallery array - main image + unique gallery images (no duplicates)
   // Support both string URLs and objects with {url, alt}
@@ -77,15 +188,77 @@ const ProductPage = () => {
     setShowReviewForm(false);
     setReviewSubmitted(false);
     setReviewError('');
-    setReviewForm({ name: '', email: '', rating: 5, title: '', text: '' });
+    setPhotoPreview(null);
+    setReviewForm({ name: '', email: '', rating: 5, title: '', text: '', photo_url: null });
   }, [id]);
 
-  // Fetch reviews from database
+  // Photo upload handler
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      setReviewError('Alleen JPEG, PNG, WebP en GIF zijn toegestaan');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setReviewError('Bestand is te groot (max 5MB)');
+      return;
+    }
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = (e) => setPhotoPreview(e.target.result);
+    reader.readAsDataURL(file);
+
+    // Upload to server
+    setUploadingPhoto(true);
+    setReviewError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`/api/reviews/upload-photo`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setReviewForm(prev => ({ ...prev, photo_url: result.photo_url }));
+      } else {
+        setReviewError(result.detail || 'Fout bij uploaden van foto');
+        setPhotoPreview(null);
+      }
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      setReviewError('Netwerkfout bij uploaden van foto');
+      setPhotoPreview(null);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const removePhoto = () => {
+    setPhotoPreview(null);
+    setReviewForm(prev => ({ ...prev, photo_url: null }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Fetch reviews from database by product_id
   const fetchReviews = async () => {
     if (!product) return;
     setLoadingReviews(true);
     try {
-      const response = await fetch(`${API_URL}/api/reviews/by-product/${encodeURIComponent(product.shortName)}`);
+      const response = await fetch(`/api/reviews/product/${product.id}`);
       if (response.ok) {
         const data = await response.json();
         setProductReviews(data);
@@ -103,6 +276,7 @@ const ProductPage = () => {
   useEffect(() => {
     if (product) {
       trackViewItem(product);
+      trackProductView(product.id, product.name);
     }
   }, [product]);
 
@@ -113,7 +287,7 @@ const ProductPage = () => {
     setSubmittingReview(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/reviews/submit`, {
+      const response = await fetch(`/api/reviews/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -123,7 +297,8 @@ const ProductPage = () => {
           email: reviewForm.email,
           rating: reviewForm.rating,
           title: reviewForm.title,
-          text: reviewForm.text
+          text: reviewForm.text,
+          photo_url: reviewForm.photo_url
         })
       });
 
@@ -147,16 +322,18 @@ const ProductPage = () => {
 
   const handleAddToCart = () => {
     addToCart(product);
+    trackAddToCart(product.id, product.name, product.price);
     setIsCartOpen(true);
   };
 
   const handleDirectOrder = () => {
     addToCart(product);
+    trackAddToCart(product.id, product.name, product.price);
     setIsCartOpen(true);
   };
 
   // Carousel handlers
-  const relatedProducts = products.filter(p => p.id !== product.id);
+  const relatedProducts = product ? products.filter(p => p.id !== product.id) : [];
   const itemsPerView = 3;
   const maxIndex = Math.max(0, relatedProducts.length - itemsPerView);
 
@@ -429,24 +606,14 @@ const ProductPage = () => {
                 </p>
               </div>
 
-              {/* Key Features - Quick Scan */}
+              {/* Key Features - Quick Scan - Dynamic from database or fallback */}
               <div className="grid grid-cols-2 gap-3 mb-6">
-                <div className="flex items-center gap-2 bg-white border border-[#e8e0d8] rounded-xl p-3">
-                  <span className="text-xl">✩</span>
-                  <span className="text-sm font-medium text-gray-700">Kalmerende sterrenhemel</span>
-                </div>
-                <div className="flex items-center gap-2 bg-white border border-[#e8e0d8] rounded-xl p-3">
-                  <span className="text-xl">💗</span>
-                  <span className="text-sm font-medium text-gray-700">White noise & hartslag</span>
-                </div>
-                <div className="flex items-center gap-2 bg-white border border-[#e8e0d8] rounded-xl p-3">
-                  <span className="text-xl">⏰</span>
-                  <span className="text-sm font-medium text-gray-700">Automatische timer</span>
-                </div>
-                <div className="flex items-center gap-2 bg-white border border-[#e8e0d8] rounded-xl p-3">
-                  <span className="text-xl">🧺</span>
-                  <span className="text-sm font-medium text-gray-700">Wasbaar & veilig</span>
-                </div>
+                {quickFeatures.map((qf, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-white border border-[#e8e0d8] rounded-xl p-3">
+                    <span className="text-xl">{qf.icon}</span>
+                    <span className="text-sm font-medium text-gray-700">{qf.label}</span>
+                  </div>
+                ))}
               </div>
 
               {/* Benefits */}
@@ -589,39 +756,115 @@ const ProductPage = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-            <div className="space-y-4">
-              <div className="w-16 h-16 bg-white rounded-2xl shadow-md flex items-center justify-center mx-auto text-warm-brown-500">
-                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-              </div>
-              <h4 className="text-xl font-black italic">AI Huilsensor</h4>
-              <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                De sensor herkent babygehuil en activeert direct om je kindje te troosten. Zo vallen ze vaak weer zelf in slaap zonder dat jij uit bed hoeft.
-              </p>
-            </div>
-            <div className="space-y-4">
-              <div className="w-16 h-16 bg-white rounded-2xl shadow-md flex items-center justify-center mx-auto text-warm-brown-500">
-                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
-                </svg>
-              </div>
-              <h4 className="text-xl font-black italic">Zachte Projectie</h4>
-              <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                De 3-in-1 projector met sterren en oceaan stimuleert de melatonine aanmaak, wat de natuurlijke slaapcyclus van je baby ondersteunt.
-              </p>
-            </div>
-            <div className="space-y-4">
-              <div className="w-16 h-16 bg-white rounded-2xl shadow-md flex items-center justify-center mx-auto text-warm-brown-500">
-                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                </svg>
-              </div>
-              <h4 className="text-xl font-black italic">Hartslag Geluid</h4>
-              <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                De baarmoderhartslag en white noise simuleren de veilige omgeving van de baarmoeder, voor een maximaal gevoel van geborgenheid.
-              </p>
-            </div>
+            {productSeries === 'ai' ? (
+              <>
+                <div className="space-y-4">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-md flex items-center justify-center mx-auto text-warm-brown-500">
+                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-black italic">AI Huilsensor</h4>
+                  <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                    De sensor herkent babygehuil en activeert direct om je kindje te troosten. Zo vallen ze vaak weer zelf in slaap.
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-md flex items-center justify-center mx-auto text-warm-brown-500">
+                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-black italic">3-in-1 Projectie</h4>
+                  <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                    Kies uit sterren, oceaan of nachtlampje. De zachte projectie stimuleert melatonine aanmaak voor betere slaap.
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-md flex items-center justify-center mx-auto text-warm-brown-500">
+                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14zm-4-4h-2v-2h2v2zm0-4h-2V7h2v4z"/>
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-black italic">USB-C Oplaadbaar</h4>
+                  <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                    Geen gedoe met batterijen. De USB-C kabel is inbegrepen en de module is binnen enkele uren opgeladen.
+                  </p>
+                </div>
+              </>
+            ) : productSeries === 'nodding' ? (
+              <>
+                <div className="space-y-4">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-md flex items-center justify-center mx-auto text-warm-brown-500">
+                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-black italic">60 Melodieën</h4>
+                  <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                    Met 60 slaapliedjes en 6 white noise opties vind je altijd het perfecte geluid om je kindje rustig te laten inslapen.
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-md flex items-center justify-center mx-auto text-warm-brown-500">
+                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-black italic">7 Lichtmodi</h4>
+                  <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                    Van zachte nachtverlichting tot sfeervol licht. 7 verschillende standen plus 3 projectiekappen (sterren, oceaan, lamp).
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-md flex items-center justify-center mx-auto text-warm-brown-500">
+                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-black italic">Nodding Off Beweging</h4>
+                  <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                    De unieke knikkende beweging kalmeert je baby en helpt bij het ontspannen. Wetenschappelijk bewezen effectief.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-md flex items-center justify-center mx-auto text-warm-brown-500">
+                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-black italic">Zachte Projectie</h4>
+                  <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                    De sterrenhemel projectie stimuleert de melatonine aanmaak, wat de natuurlijke slaapcyclus van je baby ondersteunt.
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-md flex items-center justify-center mx-auto text-warm-brown-500">
+                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-black italic">Rustgevende Melodieën</h4>
+                  <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                    Kalmerende slaapliedjes en white noise geluiden helpen je kindje sneller en dieper in slaap te vallen.
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-md flex items-center justify-center mx-auto text-warm-brown-500">
+                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-black italic">Geborgen Gevoel</h4>
+                  <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                    De combinatie van zacht licht en kalmerende geluiden creëert een veilige omgeving voor je kindje.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </section>
 
@@ -630,11 +873,13 @@ const ProductPage = () => {
           <div className="h-full min-h-[400px]">
             <img 
               src={
+                product.macroImage || 
                 (galleryImages[4]?.url || galleryImages[4]) || 
                 (galleryImages[1]?.url || galleryImages[1]) || 
                 (product.image?.url || product.image)
               }
               alt={
+                product.macroImage ? `${product.name} materiaal detail` :
                 galleryImages[4]?.alt || 
                 galleryImages[1]?.alt || 
                 `${product.name} materiaal detail`
@@ -666,52 +911,53 @@ const ProductPage = () => {
           </div>
         </section>
 
-        {/* Section 3: Technical Specs */}
+        {/* Section 3: Technical Specs - Dynamic based on product series */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           <div className="order-2 lg:order-1 space-y-8">
             <h2 className="text-3xl md:text-4xl font-black italic text-slate-800">Technische Specificaties</h2>
             <div className="space-y-0">
               <div className="flex justify-between py-5 border-b border-warm-brown-100 group">
                 <span className="font-black text-slate-400 uppercase tracking-widest text-[11px] group-hover:text-warm-brown-600 transition">
-                  Projectie Standen
+                  Projectie / Licht
                 </span>
-                <span className="font-bold text-slate-800 italic">3-in-1 (Sterren, Oceaan, Lamp)</span>
+                <span className="font-bold text-slate-800 italic">{productSpecs.projection}</span>
               </div>
               <div className="flex justify-between py-5 border-b border-warm-brown-100 group">
                 <span className="font-black text-slate-400 uppercase tracking-widest text-[11px] group-hover:text-warm-brown-600 transition">
                   Audio Content
                 </span>
-                <span className="font-bold text-slate-800 italic">10 Slaapliedjes + 5 White Noise</span>
+                <span className="font-bold text-slate-800 italic">{productSpecs.audio}</span>
               </div>
               <div className="flex justify-between py-5 border-b border-warm-brown-100 group">
                 <span className="font-black text-slate-400 uppercase tracking-widest text-[11px] group-hover:text-warm-brown-600 transition">
                   Voeding
                 </span>
-                <span className="font-bold text-slate-800 italic">USB-C Oplaadbaar (Inbegrepen)</span>
+                <span className="font-bold text-slate-800 italic">{productSpecs.power}</span>
               </div>
               <div className="flex justify-between py-5 border-b border-warm-brown-100 group">
                 <span className="font-black text-slate-400 uppercase tracking-widest text-[11px] group-hover:text-warm-brown-600 transition">
                   Timer
                 </span>
-                <span className="font-bold text-slate-800 italic">30 minuten Auto-uit</span>
+                <span className="font-bold text-slate-800 italic">{productSpecs.timer}</span>
               </div>
             </div>
             <div className="p-5 bg-warm-brown-50 rounded-2xl border border-warm-brown-100 italic">
               <p className="text-xs text-warm-brown-800 font-bold leading-relaxed">
                 <span className="uppercase mr-2 font-black">Tip:</span> 
-                Oplaadbare batterijen zijn niet nodig, omdat de {product.shortName} volledig oplaadbaar is via USB. 
-                De module heeft een ingebouwde timer van 30 minuten voor optimaal energieverbruik.
+                {productSpecs.tipText}
               </p>
             </div>
           </div>
           <div className="order-1 lg:order-2">
             <img 
               src={
+                product.dimensionsImage ||
                 (galleryImages[3]?.url || galleryImages[3]) || 
                 (galleryImages[2]?.url || galleryImages[2]) || 
                 (product.image?.url || product.image)
               }
               alt={
+                product.dimensionsImage ? `${product.name} afmetingen` :
                 galleryImages[3]?.alt || 
                 galleryImages[2]?.alt || 
                 `${product.name} afmetingen`
@@ -756,11 +1002,12 @@ const ProductPage = () => {
                 >
                   {/* Header with Avatar */}
                   <div className="flex items-start gap-3 mb-4">
-                    <img 
-                      src={review.avatar || `https://i.pravatar.cc/48?img=${(review.id % 20) + 20}`}
-                      alt={review.name}
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
+                    <div 
+                      className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-[#8B7355] text-white font-bold text-lg"
+                      data-testid={`review-avatar-${index}`}
+                    >
+                      {(review.name || '?').charAt(0).toUpperCase()}
+                    </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-gray-900">{review.name}</span>
@@ -943,6 +1190,61 @@ const ProductPage = () => {
                       className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B7355] resize-none"
                       data-testid="review-text-input"
                     />
+                  </div>
+
+                  {/* Photo Upload */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Foto toevoegen (optioneel)
+                    </label>
+                    <div className="space-y-3">
+                      {/* Photo Preview */}
+                      {photoPreview && (
+                        <div className="relative inline-block">
+                          <img 
+                            src={photoPreview} 
+                            alt="Preview" 
+                            className="w-32 h-32 object-cover rounded-lg border border-gray-200"
+                          />
+                          <button
+                            type="button"
+                            onClick={removePhoto}
+                            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )}
+                      
+                      {/* Upload Button */}
+                      {!photoPreview && (
+                        <div 
+                          onClick={() => fileInputRef.current?.click()}
+                          className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-[#8B7355] hover:bg-[#8B7355]/5 transition-colors"
+                        >
+                          {uploadingPhoto ? (
+                            <div className="flex items-center justify-center gap-2 text-gray-500">
+                              <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                              Uploaden...
+                            </div>
+                          ) : (
+                            <>
+                              <Camera className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                              <p className="text-sm text-gray-500">Klik om een foto te uploaden</p>
+                              <p className="text-xs text-gray-400 mt-1">Max 5MB • JPG, PNG, WebP of GIF</p>
+                            </>
+                          )}
+                        </div>
+                      )}
+                      
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        onChange={handlePhotoUpload}
+                        className="hidden"
+                      />
+                    </div>
                   </div>
 
                   {/* Buttons */}

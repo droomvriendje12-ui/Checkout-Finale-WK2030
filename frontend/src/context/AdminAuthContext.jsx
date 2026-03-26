@@ -1,8 +1,7 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
-
+// Use relative URL for local proxy
 // Auth Context
 const AdminAuthContext = createContext(null);
 
@@ -25,7 +24,7 @@ export const AdminAuthProvider = ({ children }) => {
 
   const verifyToken = async (token) => {
     try {
-      const response = await fetch(`${API_URL}/api/admin/verify`, {
+      const response = await fetch('/api/admin/verify', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -44,11 +43,8 @@ export const AdminAuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
-      const response = await fetch(`${API_URL}/api/admin/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
+      // Use GET-based dev-login for CRA proxy compatibility
+      const response = await fetch(`/api/admin/dev-login?u=${encodeURIComponent(username)}&p=${encodeURIComponent(password)}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -61,6 +57,7 @@ export const AdminAuthProvider = ({ children }) => {
         return { success: false, error: error.detail || 'Login mislukt' };
       }
     } catch (error) {
+      console.error('Login error:', error);
       return { success: false, error: 'Verbinding mislukt' };
     }
   };
