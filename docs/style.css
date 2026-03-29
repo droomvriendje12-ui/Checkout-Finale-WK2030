@@ -1,0 +1,24 @@
+/* Styles for Checkout-Finale-WK2030 */
+
+body {
+    background-color: #f8f9fa;
+    font-family: Arial, sans-serif;
+    color: #333;
+}
+
+h1, h2, h3 {
+    font-weight: bold;
+}
+
+button {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+    background-color: #007bff;
+    color: white;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
