@@ -9,7 +9,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://match-dreams-app.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8001')
 
 
 class TestContactFormAPI:
@@ -23,7 +23,7 @@ class TestContactFormAPI:
             "telefoon": "06-12345678",
             "onderwerp": "Test Vraag",
             "bericht": "Dit is een test bericht voor de email notificatie.",
-            "page_url": "https://match-dreams-app.preview.emergentagent.com/contact"
+            "page_url": "http://localhost:8001/contact"
         }
         
         response = requests.post(f"{BASE_URL}/api/contact", json=payload)

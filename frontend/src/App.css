@@ -9,9 +9,9 @@
 }
 
 /* Hide platform branding */
-#emergent-badge,
-[id*="emergent"],
-a[href*="emergent.sh"] {
+#platform-badge,
+[id*="platform-branding"],
+a[href*="platform.example"] {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;

@@ -14,7 +14,7 @@ from datetime import datetime
 import time
 
 # Configuration
-BASE_URL = "https://match-dreams-app.preview.emergentagent.com/api"
+BASE_URL = "http://localhost:8001/api"
 HEADERS = {"Content-Type": "application/json"}
 
 class DroomvriendjesAPITester:

@@ -135,7 +135,7 @@ const VrouwenLandingPage = () => {
           <div className="flex justify-between items-center py-4">
             <Link to="/" className="flex items-center space-x-3">
               <img 
-                src="https://customer-assets.emergentagent.com/job_plush-revamp/artifacts/npuc23bl_lgoo%20ads%20%281%29.png" 
+                src="/logo.svg" 
                 alt="Droomvriendjes.nl" 
                 className="h-16 w-auto"
               />

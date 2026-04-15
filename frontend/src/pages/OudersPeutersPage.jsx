@@ -64,7 +64,7 @@ const OudersPeutersPage = () => {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <Link to="/" className="flex items-center space-x-3">
-              <img src="https://customer-assets.emergentagent.com/job_plush-revamp/artifacts/npuc23bl_lgoo%20ads%20%281%29.png" alt="Droomvriendjes.nl" className="h-14 w-auto" />
+              <img src="/logo.svg" alt="Droomvriendjes.nl" className="h-14 w-auto" />
             </Link>
             <Link to="/knuffels">
               <Button className="bg-yellow-400 hover:bg-yellow-500 text-[#2d5a3d] font-bold rounded-full px-6 py-2 shadow-lg transition-all hover:scale-105 hover:-rotate-1">
