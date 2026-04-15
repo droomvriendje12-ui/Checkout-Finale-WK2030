@@ -1,9 +1,18 @@
 {
-  "env": {
-    "NODE_ENV": "production",
-    "DATABASE_URL": "<your_database_url>",
-    "API_KEY": "<your_api_key>"
-  },
-  "memory": "512mb",
-  "start": "npm start --prefix ./your-working-directory"
+  "services": [
+    {
+      "name": "frontend",
+      "rootDirectory": "frontend",
+      "buildCommand": "npm install && npm run build",
+      "startCommand": "npm start",
+      "port": 3000
+    },
+    {
+      "name": "backend",
+      "rootDirectory": "backend",
+      "buildCommand": "pip install -r requirements.txt",
+      "startCommand": "uvicorn server:app --host 0.0.0.0 --port 8001",
+      "port": 8001
+    }
+  ]
 }
