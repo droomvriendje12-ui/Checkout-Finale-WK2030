@@ -2,7 +2,18 @@
   "env": {
     "NODE_ENV": "production",
     "DATABASE_URL": "<your_database_url>",
-    "API_KEY": "<your_api_key>"
+    "API_KEY": "<your_api_key>",
+
+    "MOLLIE_API_KEY": "<live_ or test_ key from Mollie dashboard>",
+    "MOLLIE_REDIRECT_URL": "<optional override, defaults to FRONTEND_URL>",
+
+    "N8N_WEBHOOK_URL": "<full URL of your n8n webhook trigger, e.g. https://n8n.example.com/webhook/droomvriendjes>",
+    "N8N_API_KEY": "<optional n8n API key sent as X-N8N-API-KEY>",
+    "N8N_WEBHOOK_SECRET": "<optional shared secret sent as X-N8N-SECRET>",
+
+    "SHIPSTATION_API_KEY": "<ShipStation API key>",
+    "SHIPSTATION_API_SECRET": "<ShipStation API secret>",
+    "SHIPSTATION_ACCOUNT_ID": "<ShipStation store/account ID (optional)>"
   },
   "memory": "512mb",
   "start": "npm start --prefix ./your-working-directory"

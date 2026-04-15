@@ -1,5 +1,10 @@
 """
 Orders & Payments API Routes - Supabase PostgreSQL based
+
+Integrations wired here:
+  - Mollie: payment creation and webhook handling
+  - n8n:    email workflow triggers (order-confirmation, payment-receipt)
+  - ShipStation: auto-sync paid orders for fulfillment
 """
 from fastapi import APIRouter, HTTPException, Request
 from typing import List, Optional
@@ -13,6 +18,7 @@ import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from mollie.api.client import Client as MollieClient
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +138,177 @@ def set_supabase_client(client):
     global supabase
     supabase = client
     logger.info("✅ Supabase client set for orders route")
+
+
+# ── n8n Integration ───────────────────────────────────────────────────────────
+
+async def _trigger_n8n_workflow(template_id: str, payload: dict) -> dict:
+    """
+    Trigger an n8n email workflow via the configured webhook URL.
+    Safe no-op when N8N_WEBHOOK_URL is not set.
+
+    Args:
+        template_id: Workflow identifier matching the n8n workflow name
+                     (e.g. 'order-confirmation', 'payment-receipt')
+        payload:     Template variables forwarded to n8n as JSON
+    """
+    webhook_url = os.environ.get("N8N_WEBHOOK_URL", "").strip()
+    if not webhook_url:
+        logger.debug("N8N_WEBHOOK_URL not configured – skipping workflow trigger")
+        return {"delivered": False, "reason": "N8N_WEBHOOK_URL not configured"}
+
+    headers = {"Content-Type": "application/json"}
+
+    # Optional shared secret for webhook authentication
+    webhook_secret = os.environ.get("N8N_WEBHOOK_SECRET", "").strip()
+    if webhook_secret:
+        headers["X-N8N-SECRET"] = webhook_secret
+
+    # Optional API key header
+    api_key = os.environ.get("N8N_API_KEY", "").strip()
+    if api_key:
+        headers["X-N8N-API-KEY"] = api_key
+
+    timeout = float(os.environ.get("N8N_TIMEOUT_SECONDS", "8"))
+    body = {
+        "event": template_id,
+        "template_id": template_id,
+        "payload": payload,
+        "source": "droomvriendjes-orders",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(webhook_url, json=body, headers=headers)
+        delivered = response.status_code < 400
+        if delivered:
+            logger.info(f"✅ n8n workflow '{template_id}' triggered (HTTP {response.status_code})")
+        else:
+            logger.warning(
+                f"⚠️ n8n workflow '{template_id}' returned HTTP {response.status_code}: {response.text[:200]}"
+            )
+        return {"delivered": delivered, "status_code": response.status_code}
+    except Exception as e:
+        logger.error(f"❌ n8n workflow trigger failed for '{template_id}': {e}")
+        return {"delivered": False, "reason": str(e)}
+
+
+# ── ShipStation Integration ───────────────────────────────────────────────────
+
+async def _sync_order_to_shipstation(order: dict, items: list) -> dict:
+    """
+    Push a paid order to ShipStation for fulfillment.
+    Safe no-op when SHIPSTATION_API_KEY is not set.
+
+    Args:
+        order: Full order dict from Supabase
+        items: List of order_items dicts from Supabase
+    """
+    api_key = os.environ.get("SHIPSTATION_API_KEY", "").strip()
+    api_secret = os.environ.get("SHIPSTATION_API_SECRET", "").strip()
+
+    if not api_key or not api_secret:
+        logger.debug("ShipStation credentials not configured – skipping fulfillment sync")
+        return {"synced": False, "reason": "ShipStation credentials not configured"}
+
+    import base64 as _b64
+    token = _b64.b64encode(f"{api_key}:{api_secret}".encode()).decode()
+    headers = {
+        "Authorization": f"Basic {token}",
+        "Content-Type": "application/json",
+    }
+
+    account_id = os.environ.get("SHIPSTATION_ACCOUNT_ID", "").strip()
+
+    # Build ShipStation order payload
+    name_parts = (order.get("customer_name") or "").split(" ", 1)
+    first_name = name_parts[0] if name_parts else ""
+    last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+    ss_items = [
+        {
+            "lineItemKey": item.get("id", ""),
+            "sku": item.get("product_sku", ""),
+            "name": item.get("product_name", "Product"),
+            "quantity": item.get("quantity", 1),
+            "unitPrice": float(item.get("unit_price", 0)),
+            "taxAmount": 0,
+            "shippingAmount": 0,
+        }
+        for item in items
+    ]
+
+    ss_address = {
+        "name": order.get("customer_name", ""),
+        "street1": order.get("shipping_address", ""),
+        "city": order.get("shipping_city", ""),
+        "postalCode": order.get("shipping_zipcode", ""),
+        "country": "NL",
+        "phone": order.get("customer_phone", ""),
+        "residential": True,
+    }
+
+    ss_payload = {
+        "orderNumber": order.get("order_number", order.get("id", "")[:8].upper()),
+        "orderKey": order.get("id", ""),
+        "orderDate": order.get("created_at", datetime.now(timezone.utc).isoformat()),
+        "orderStatus": "awaiting_shipment",
+        "customerEmail": order.get("customer_email", ""),
+        "billTo": ss_address,
+        "shipTo": ss_address,
+        "items": ss_items,
+        "amountPaid": float(order.get("total_amount", 0)),
+        "taxAmount": 0,
+        "shippingAmount": 0,
+        "customerNotes": order.get("customer_notes", ""),
+        "internalNotes": f"Droomvriendjes order {order.get('id', '')}",
+        "gift": bool(order.get("gift_wrap", False)),
+        "paymentMethod": order.get("payment_method", "ideal"),
+        "requestedShippingService": "PostNL",
+        "carrierCode": "postnl",
+        "serviceCode": "postnl_standard",
+        "packageCode": "package",
+        "weight": {"value": len(ss_items) * 500, "units": "grams"},
+    }
+
+    if account_id:
+        ss_payload["advancedOptions"] = {"storeId": int(account_id)}
+
+    timeout = float(os.environ.get("SHIPSTATION_TIMEOUT_SECONDS", "15"))
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                "https://ssapi.shipstation.com/orders/createorder",
+                json=ss_payload,
+                headers=headers,
+            )
+
+        if response.status_code < 400:
+            ss_data = response.json()
+            ss_order_id = ss_data.get("orderId")
+            logger.info(
+                f"✅ Order {order.get('id')} synced to ShipStation: SS#{ss_order_id}"
+            )
+            # Persist ShipStation order ID
+            if supabase and ss_order_id:
+                supabase.table("orders").update(
+                    {
+                        "shipstation_order_id": str(ss_order_id),
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                ).eq("id", order.get("id")).execute()
+            return {"synced": True, "shipstation_order_id": ss_order_id}
+        else:
+            logger.warning(
+                f"⚠️ ShipStation sync returned HTTP {response.status_code}: {response.text[:200]}"
+            )
+            return {"synced": False, "reason": f"HTTP {response.status_code}"}
+
+    except Exception as e:
+        logger.error(f"❌ ShipStation sync failed for order {order.get('id')}: {e}")
+        return {"synced": False, "reason": str(e)}
 
 
 # Pydantic models
@@ -401,21 +578,59 @@ async def mollie_webhook(request: Request):
         
         logger.info(f"Payment {payment_id} status updated to: {new_status}")
         
-        # Send emails on payment status change
-        try:
-            order_result = supabase.table("orders").select("*").eq("id", order_id).limit(1).execute()
-            items_result = supabase.table("order_items").select("*").eq("order_id", order_id).execute()
-            if order_result.data:
-                order = order_result.data[0]
-                items = items_result.data or []
-                if new_status == 'paid':
-                    _send_order_confirmation(order, items)
-                    _send_order_notification(order, items, 'payment_success')
-                elif new_status == 'cancelled':
-                    _send_order_notification(order, items, 'payment_failed')
-        except Exception as email_err:
-            logger.error(f"Failed to send payment emails: {email_err}")
-        
+        # Fetch order and items for downstream integrations
+        order_result = supabase.table("orders").select("*").eq("id", order_id).limit(1).execute()
+        items_result = supabase.table("order_items").select("*").eq("order_id", order_id).execute()
+        order = order_result.data[0] if order_result.data else {}
+        items = items_result.data or []
+
+        if new_status == 'paid':
+            # 1. Legacy SMTP confirmation emails (fallback when n8n is not configured)
+            try:
+                _send_order_confirmation(order, items)
+                _send_order_notification(order, items, 'payment_success')
+            except Exception as email_err:
+                logger.error(f"Failed to send legacy payment emails: {email_err}")
+
+            # 2. n8n: trigger order-confirmation and payment-receipt workflows
+            try:
+                n8n_payload = {
+                    "email": order.get("customer_email", ""),
+                    "name": order.get("customer_name", ""),
+                    "orderId": order_id,
+                    "orderNumber": order.get("order_number", ""),
+                    "totalAmount": order.get("total_amount", 0),
+                    "paymentMethod": order.get("payment_method", ""),
+                    "shippingAddress": order.get("shipping_address", ""),
+                    "shippingCity": order.get("shipping_city", ""),
+                    "shippingZipcode": order.get("shipping_zipcode", ""),
+                    "items": [
+                        {
+                            "name": i.get("product_name", ""),
+                            "sku": i.get("product_sku", ""),
+                            "quantity": i.get("quantity", 1),
+                            "unitPrice": i.get("unit_price", 0),
+                        }
+                        for i in items
+                    ],
+                }
+                await _trigger_n8n_workflow("order-confirmation", n8n_payload)
+                await _trigger_n8n_workflow("payment-receipt", n8n_payload)
+            except Exception as n8n_err:
+                logger.error(f"n8n workflow trigger failed for order {order_id}: {n8n_err}")
+
+            # 3. ShipStation: auto-sync paid order for fulfillment
+            try:
+                await _sync_order_to_shipstation(order, items)
+            except Exception as ss_err:
+                logger.error(f"ShipStation sync failed for order {order_id}: {ss_err}")
+
+        elif new_status == 'cancelled':
+            try:
+                _send_order_notification(order, items, 'payment_failed')
+            except Exception as email_err:
+                logger.error(f"Failed to send payment-failed email: {email_err}")
+
         return {"status": "ok"}
         
     except Exception as e:
