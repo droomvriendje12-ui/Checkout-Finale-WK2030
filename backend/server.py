@@ -206,6 +206,7 @@ from routes import ai_campaigns as ai_campaigns_route
 from routes import gift_cards_supabase as gift_cards_supabase_route
 from routes import csv_import as csv_import_route
 from routes import email_logs as email_logs_route
+from routes import shipstation as shipstation_route
 
 # Configure routes based on database choice
 if USE_SUPABASE and supabase_client:
@@ -284,6 +285,12 @@ if USE_SUPABASE and supabase_client:
     logger.info("🚀 Using SUPABASE for email logs")
     email_logs_route.set_supabase_client(supabase_client)
     api_router.include_router(email_logs_route.router)
+
+# ShipStation Fulfillment
+logger.info("🚀 Registering ShipStation fulfillment routes")
+if USE_SUPABASE and supabase_client:
+    shipstation_route.set_supabase_client(supabase_client)
+api_router.include_router(shipstation_route.router)
 
 # ============== GOOGLE SHOPPING FEED CONSTANTS ==============
 SHOP_URL = os.environ.get('SHOP_URL', 'https://droomvriendjes.nl')
@@ -460,6 +467,36 @@ async def n8n_test(payload: N8NTestPayload):
     except Exception as e:
         logger.error(f"N8N test webhook failed: {e}")
         raise HTTPException(status_code=502, detail=f"n8n webhook failed: {e}")
+
+
+class N8NTriggerPayload(BaseModel):
+    template_id: str
+    payload: dict = Field(default_factory=dict)
+
+
+@app.post("/api/integrations/n8n/trigger")
+async def n8n_trigger(body: N8NTriggerPayload):
+    """
+    Trigger a specific n8n email workflow by template ID.
+
+    Called by the frontend lib/n8n.js helpers (sendEmailViaWorkflow, etc.).
+    The template_id is forwarded to n8n as both the 'event' and 'template_id'
+    fields so n8n workflows can route on either.
+
+    Supported template IDs:
+      order-confirmation, shipping-notification, payment-receipt,
+      abandoned-cart, abandoned-cart-2, abandoned-cart-3,
+      welcome, welcome-2, welcome-3
+    """
+    if not body.template_id:
+        raise HTTPException(status_code=400, detail="template_id is required")
+
+    try:
+        result = await send_n8n_webhook(body.template_id, body.payload)
+        return {"status": "ok", "template_id": body.template_id, **result}
+    except Exception as e:
+        logger.error(f"N8N trigger failed for template '{body.template_id}': {e}")
+        raise HTTPException(status_code=502, detail=f"n8n trigger failed: {e}")
 
 
 # ============== EMAIL FUNCTIONS ==============
