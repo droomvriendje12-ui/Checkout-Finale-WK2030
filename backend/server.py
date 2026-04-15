@@ -1,6 +1,8 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, Response
 from motor.motor_asyncio import AsyncIOMotorClient
 from supabase import create_client, Client as SupabaseClient
 import os
@@ -138,6 +140,12 @@ def get_frontend_url():
 def get_api_url():
     """Get API URL from environment"""
     return os.environ.get('API_URL', 'https://droomvriendjes.nl')
+
+def get_cors_origins() -> List[str]:
+    """Parse CORS origins from env for Railway/production deployments."""
+    raw = os.environ.get("CORS_ORIGINS", "*")
+    origins = [item.strip() for item in raw.split(",") if item.strip()]
+    return origins or ["*"]
 
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://droomvriendjes.nl')
 API_URL = os.environ.get('API_URL', 'https://droomvriendjes.nl')
@@ -409,6 +417,49 @@ async def api_health_check():
             "mongodb_connected": True
         }
     }
+
+
+class N8NTestPayload(BaseModel):
+    event: str = "railway_test"
+    payload: dict = Field(default_factory=dict)
+
+
+async def send_n8n_webhook(event: str, payload: dict) -> dict:
+    """Forward events to n8n when configured (safe no-op when disabled)."""
+    webhook_url = os.environ.get("N8N_WEBHOOK_URL", "").strip()
+    if not webhook_url:
+        return {"delivered": False, "reason": "N8N_WEBHOOK_URL not configured"}
+
+    headers = {"Content-Type": "application/json"}
+    webhook_secret = os.environ.get("N8N_WEBHOOK_SECRET", "").strip()
+    if webhook_secret:
+        headers["X-N8N-SECRET"] = webhook_secret
+
+    timeout_seconds = float(os.environ.get("N8N_TIMEOUT_SECONDS", "8"))
+    body = {
+        "event": event,
+        "payload": payload,
+        "source": "droomvriendjes-backend",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    async with httpx.AsyncClient(timeout=timeout_seconds) as client_http:
+        response = await client_http.post(webhook_url, json=body, headers=headers)
+        return {
+            "delivered": response.status_code < 400,
+            "status_code": response.status_code,
+        }
+
+
+@app.post("/api/integrations/n8n/test")
+async def n8n_test(payload: N8NTestPayload):
+    """Smoke test endpoint for future n8n workflow wiring."""
+    try:
+        result = await send_n8n_webhook(payload.event, payload.payload)
+        return {"status": "ok", **result}
+    except Exception as e:
+        logger.error(f"N8N test webhook failed: {e}")
+        raise HTTPException(status_code=502, detail=f"n8n webhook failed: {e}")
 
 
 # ============== EMAIL FUNCTIONS ==============
@@ -3542,8 +3593,6 @@ app.include_router(api_router)
 
 # ============== GOOGLE SHOPPING XML FEED ==============
 
-from fastapi.responses import Response
-
 @app.get("/api/feed/google-shopping.xml")
 async def google_shopping_feed():
     """Generate Google Shopping Product Feed in XML format - Dynamic from MongoDB"""
@@ -4272,13 +4321,32 @@ async def start_post_purchase_flow(order_id: str):
     raise HTTPException(status_code=500, detail="Failed to start flow")
 
 
+cors_origins = get_cors_origins()
+allow_credentials = "*" not in cors_origins
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_credentials=allow_credentials,
+    allow_origins=cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Optional frontend static hosting for single-service Railway deployments.
+FRONTEND_BUILD_DIR = (ROOT_DIR.parent / "frontend" / "build").resolve()
+if FRONTEND_BUILD_DIR.exists():
+    static_dir = FRONTEND_BUILD_DIR / "static"
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=static_dir), name="frontend-static")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        # Never intercept API/webhook/health routes.
+        if full_path.startswith("api/") or full_path.startswith("health"):
+            raise HTTPException(status_code=404, detail="Not found")
+        requested = (FRONTEND_BUILD_DIR / full_path).resolve()
+        if requested.exists() and requested.is_file() and str(requested).startswith(str(FRONTEND_BUILD_DIR)):
+            return FileResponse(requested)
+        return FileResponse(FRONTEND_BUILD_DIR / "index.html")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

@@ -1,6 +1,6 @@
 """
 AI Marketing Campaign Creator
-Generates content via Emergent LLM Key (OpenAI GPT)
+Generates content via OpenAI GPT
 Supports posting to TikTok, Facebook, Instagram (copy-friendly)
 """
 from fastapi import APIRouter, HTTPException
@@ -53,16 +53,14 @@ class CampaignResponse(BaseModel):
 
 
 async def generate_ai_content(product_name: str, product_description: str, platform: str, tone: str, goal: str, audience: str) -> dict:
-    """Generate marketing content using Emergent LLM Key (OpenAI GPT)"""
+    """Generate marketing content using OpenAI GPT"""
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        from openai import AsyncOpenAI
 
-        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        api_key = os.environ.get("OPENAI_API_KEY", "")
         if not api_key:
-            logger.warning("EMERGENT_LLM_KEY not set, using fallback")
+            logger.warning("OPENAI_API_KEY not set, using fallback")
             return _fallback_content(product_name, product_description, platform)
-
-        session_id = f"campaign_{platform}_{uuid.uuid4().hex[:8]}"
 
         system_msg = (
             "Je bent een creatieve social media marketing expert gespecialiseerd in "
@@ -71,12 +69,7 @@ async def generate_ai_content(product_name: str, product_description: str, platf
             "Je weet hoe je ouders emotioneel raakt en tot actie aanzet."
         )
 
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=session_id,
-            system_message=system_msg
-        )
-        chat.with_model("openai", "gpt-4o")
+        client = AsyncOpenAI(api_key=api_key)
 
         platform_instructions = {
             "facebook": f"""Schrijf een Facebook advertentie/post voor "{product_name}".
@@ -124,8 +117,15 @@ Geef het resultaat in EXACT dit JSON format (geen extra tekst):
         }
 
         prompt = platform_instructions.get(platform, platform_instructions["facebook"])
-        user_message = UserMessage(text=prompt)
-        response = await chat.send_message(user_message)
+        completion = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7
+        )
+        response = completion.choices[0].message.content or ""
 
         try:
             clean = response.strip()
@@ -259,7 +259,7 @@ async def get_products_for_campaigns():
 async def get_config_status():
     """Check which integrations are configured"""
     return {
-        "ai_ready": bool(os.environ.get("EMERGENT_LLM_KEY")),
+        "ai_ready": bool(os.environ.get("OPENAI_API_KEY")),
         "tiktok_configured": bool(TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET),
         "facebook_configured": False,
         "instagram_configured": False,

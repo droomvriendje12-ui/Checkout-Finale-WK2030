@@ -488,7 +488,7 @@ export const reviews = [
     text: "Zeer zacht knuffeltje met prettig licht, ons kind slaapt er rustig mee in. De kwaliteit is top!",
     verified: true,
     product: "Slimme Leeuw",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/d244d74a8f47870b355ab304efb3133a5dd797d99e1160bb61475e41e8e4eb90.png"
+    avatar: "/logo.svg"
   },
   {
     id: 2,
@@ -499,7 +499,7 @@ export const reviews = [
     text: "Mooi ontwerp en fijne verlichting, iets kleiner dan verwacht maar onze dochter is er dol op.",
     verified: true,
     product: "Slimme Leeuw",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/a11460d8cecaa08d7fcc692578251ef6d8dc284595f3026804d93f132308a039.png"
+    avatar: "/logo.svg"
   },
   {
     id: 3,
@@ -510,7 +510,7 @@ export const reviews = [
     text: "Perfect nachtlampje voor de babykamer, geeft warm en rustig licht. De sterrenprojectie is prachtig.",
     verified: true,
     product: "Slimme Leeuw",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/0792732468dc40ed3f703b855c9d6801031b5fc7cb82c231845a2cf7cf1ab391.png"
+    avatar: "/logo.svg"
   },
   {
     id: 4,
@@ -521,7 +521,7 @@ export const reviews = [
     text: "Goede kwaliteit en voelt stevig aan, zeer tevreden. Mijn zoontje slaapt nu veel rustiger.",
     verified: true,
     product: "Slaperig Schaapje",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/d2023b66f077ea0f34986a60b319c0f01507a269e5b2d5fca38e7a9b25f77cf8.png"
+    avatar: "/logo.svg"
   },
   {
     id: 5,
@@ -532,7 +532,7 @@ export const reviews = [
     text: "Mijn dochter is er meteen dol op geworden. Ze neemt hem overal mee naartoe. Top kwaliteit!",
     verified: true,
     product: "Slaperig Schaapje",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/afc52adf4bf0fff2a665314245979ecdec5d204eb652a6fca2faced41d574d22.png"
+    avatar: "/logo.svg"
   },
   {
     id: 6,
@@ -543,7 +543,7 @@ export const reviews = [
     text: "Makkelijk te bedienen en zacht genoeg om te knuffelen. Fijn product voor de kinderkamer.",
     verified: true,
     product: "Slaperig Schaapje",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/1d580c8b709b44e0c63a2b8d5bef8215a91a4257891e19e2ba2e2205dbe1bfa5.png"
+    avatar: "/logo.svg"
   },
   {
     id: 7,
@@ -554,7 +554,7 @@ export const reviews = [
     text: "Ideale combinatie van knuffel en nachtlampje. Onze baby van 8 maanden slaapt er heerlijk mee.",
     verified: true,
     product: "Slaperige Panda",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/e6b97932c5d6cd11dd07de86e9d552c6ea68fffdcc4a5a99d17974bebb98335e.png"
+    avatar: "/logo.svg"
   },
   {
     id: 8,
@@ -565,7 +565,7 @@ export const reviews = [
     text: "Ziet er leuk uit en werkt precies zoals beschreven. De kalmerende muziek is heerlijk!",
     verified: true,
     product: "Slaperige Panda",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/d4a59540e4928b2947094a2e76f409cbbc95e83e6f0485da775db1045178fe39.png"
+    avatar: "/logo.svg"
   },
   {
     id: 9,
@@ -576,7 +576,7 @@ export const reviews = [
     text: "Heel schattig en niet te fel voor 's nachts. Onze zoon kijkt nu naar de sterrenhemel in plaats van tablet.",
     verified: true,
     product: "Slaperige Panda",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/7c46cb0b004c0b3f6352e5e951ad7f4312539bfa867ceb772cd47b7830b3f2fa.png"
+    avatar: "/logo.svg"
   },
   {
     id: 10,
@@ -587,7 +587,7 @@ export const reviews = [
     text: "Fijn product, doet wat het moet doen. Mijn dochtertje is er verliefd op.",
     verified: true,
     product: "Stoere Dino",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/8e34db9f4bbfd3c2881e92254d6b8c6124bcc9c633cb519f9aa0c95a82e268d1.png"
+    avatar: "/logo.svg"
   },
   {
     id: 11,
@@ -598,7 +598,7 @@ export const reviews = [
     text: "Geeft een veilig gevoel in bed voor ons kind. De sterrenprojectie is prachtig!",
     verified: true,
     product: "Stoere Dino",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/9aa3940d2f2d7b300b56cb73430fc2cffbe83953b6a9b12f59e89f8e9d6474f1.png"
+    avatar: "/logo.svg"
   },
   {
     id: 12,
@@ -609,7 +609,7 @@ export const reviews = [
     text: "Zacht materiaal en goede afwerking. Onze 3-jarige was altijd bang in het donker, nu niet meer!",
     verified: true,
     product: "Stoere Dino",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/1bedcbc7db82520e0309faeeb8fd81f2d6e2793179a01e2f158f95d0023bc8b4.png"
+    avatar: "/logo.svg"
   },
   {
     id: 13,
@@ -620,7 +620,7 @@ export const reviews = [
     text: "Mooi cadeau voor jonge ouders. De baby slaapt nu veel rustiger. Aanrader!",
     verified: true,
     product: "Magische Eenhoorn",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/d5873aa7b1eed68178e5afb0cf49f3c21f4a7f7b2926f51dff8e8f0559e1eadb.png"
+    avatar: "/logo.svg"
   },
   {
     id: 14,
@@ -631,7 +631,7 @@ export const reviews = [
     text: "Handig in gebruik, ook midden in de nacht. Mijn dochter vindt het magisch!",
     verified: true,
     product: "Magische Eenhoorn",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/666a1106bef3fc94dc1e5f12fe547e525212c5e85e782a098b9beff147a3059b.png"
+    avatar: "/logo.svg"
   },
   {
     id: 15,
@@ -642,7 +642,7 @@ export const reviews = [
     text: "Ons zoontje neemt hem overal mee naartoe. De kwaliteit is echt top!",
     verified: true,
     product: "Magische Eenhoorn",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/206e5f71fa593021a56848c539c5afb0a364eaaa2d4a5b8bdb60a0ca2e657218.png"
+    avatar: "/logo.svg"
   },
   {
     id: 16,
@@ -653,7 +653,7 @@ export const reviews = [
     text: "Prima kwaliteit voor deze prijs. Onze tweeling is er dol op!",
     verified: true,
     product: "Duo Set",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/e177922a69f0a90b82fcc4186ce4468d902e67c50c18e4a3edf81dbf5941ff1e.png"
+    avatar: "/logo.svg"
   },
   {
     id: 17,
@@ -664,7 +664,7 @@ export const reviews = [
     text: "Rustgevend licht en lieve uitstraling. Beide kinderen slapen nu door!",
     verified: true,
     product: "Duo Set",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/888e4cd9bd3cdcb865250af54433f816044f6271d2db619195dc5188dd52247b.png"
+    avatar: "/logo.svg"
   },
   {
     id: 18,
@@ -675,7 +675,7 @@ export const reviews = [
     text: "Zeer geschikt voor peuters. Geen ruzie meer over wie welke knuffel krijgt!",
     verified: true,
     product: "Duo Set",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/8c246f56537bedce49bcfb552a44a50c3b87b87ba4d668b464c1e5a714d64acf.png"
+    avatar: "/logo.svg"
   },
   {
     id: 19,
@@ -686,7 +686,7 @@ export const reviews = [
     text: "Precies wat we zochten voor het slapen gaan. De sterrenhemel is zo mooi!",
     verified: true,
     product: "Bruine Beer",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/4ef0058cdf8bf199e785ddf40e1981dc46cecaa083a88c9867a9959762ab8882.png"
+    avatar: "/logo.svg"
   },
   {
     id: 20,
@@ -697,7 +697,7 @@ export const reviews = [
     text: "Stevig en zacht tegelijk, erg tevreden. Onze dochter slaapt nu binnen 10 minuten.",
     verified: true,
     product: "Bruine Beer",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/9fe1820161e84325bfd54e93bd7383862515a58a4ac9e3a2fe85d3f5912e5ee2.png"
+    avatar: "/logo.svg"
   },
   {
     id: 21,
@@ -708,7 +708,7 @@ export const reviews = [
     text: "Fijn nachtlampje zonder storend licht. De geluidskwaliteit is ook top!",
     verified: true,
     product: "Bruine Beer",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/d972265210076a020aa3281083ea0e2fc5b763628c8aa0cd64e3afed9257a35d.png"
+    avatar: "/logo.svg"
   },
   {
     id: 22,
@@ -719,7 +719,7 @@ export const reviews = [
     text: "Goede functies en mooi design. Mijn zoon neemt hem overal mee.",
     verified: true,
     product: "Liggend Schaapje",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/147a82a13177c4671a2d1dfa601932419a3732839002bb653897186647632ad7.png"
+    avatar: "/logo.svg"
   },
   {
     id: 23,
@@ -730,7 +730,7 @@ export const reviews = [
     text: "Mijn dochter slaapt sneller in sinds we deze gebruiken. Fantastische aankoop!",
     verified: true,
     product: "Liggend Schaapje",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/b7dfba04fe153fe75f7f35d49bf0f0386a10d3fa2ce66e92b8d4aa352919dd5c.png"
+    avatar: "/logo.svg"
   },
   {
     id: 24,
@@ -741,7 +741,7 @@ export const reviews = [
     text: "Netjes afgewerkt en eenvoudig te bedienen. Aanrader voor jonge kinderen!",
     verified: true,
     product: "Liggend Schaapje",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/13c172b41853d343594708cfa06884d65f7e70478e735bbc2ab0c6160d6b2db2.png"
+    avatar: "/logo.svg"
   },
   {
     id: 25,
@@ -752,7 +752,7 @@ export const reviews = [
     text: "Heel zacht en vriendelijk gezichtje. Onze baby is er meteen dol op!",
     verified: true,
     product: "Pinguïn",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/044df327659befd8f587df7a8dd9c5af5f8cf00a7ff0868da175f0649348b286.png"
+    avatar: "/logo.svg"
   },
   {
     id: 26,
@@ -763,7 +763,7 @@ export const reviews = [
     text: "Werkt betrouwbaar en voelt veilig aan. De white noise helpt enorm!",
     verified: true,
     product: "Pinguïn",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/b9b41d75d5fdac1a091a4708e81da31c624ceeffc80515274a20073ba915ba37.png"
+    avatar: "/logo.svg"
   },
   {
     id: 27,
@@ -774,7 +774,7 @@ export const reviews = [
     text: "Zeker een aanrader voor jonge kinderen. De sterrenprojectie is prachtig!",
     verified: true,
     product: "Pinguïn",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/4e307c57525ca36b4ac554e991890ec08ac987f9298a69ef042a305131777774.png"
+    avatar: "/logo.svg"
   },
   {
     id: 28,
@@ -785,7 +785,7 @@ export const reviews = [
     text: "Doet precies wat het belooft. Fijne knuffel voor ons zoontje.",
     verified: true,
     product: "Grijze Teddy",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/ec911a715cfdbc8522432aca7a65b3d9069c566f3a45b38a01776e0ce62ba6e4.png"
+    avatar: "/logo.svg"
   },
   {
     id: 29,
@@ -796,7 +796,7 @@ export const reviews = [
     text: "Prachtig product voor het avondritueel. Maakt bedtijd een stuk rustiger!",
     verified: true,
     product: "Grijze Teddy",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/baf39649f65b3928bea4820b411bc21edc0f033bed41b3c3b5ec015b487d1f6f.png"
+    avatar: "/logo.svg"
   },
   {
     id: 30,
@@ -807,7 +807,7 @@ export const reviews = [
     text: "Goede balans tussen knuffel en lamp. Onze dochter wil hem niet meer missen!",
     verified: true,
     product: "Grijze Teddy",
-    avatar: "https://static.prod-images.emergentagent.com/jobs/2409d4a1-a842-4b9a-9da4-375b73bbb74d/images/ee8c342e320ff69ea6b5e693bfe0b07052f842a61019f6082018899604a2577f.png"
+    avatar: "/logo.svg"
   }
 ];
 

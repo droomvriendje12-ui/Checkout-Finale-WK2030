@@ -262,15 +262,15 @@ async def get_all_integrations():
         }
     })
     
-    # Emergent LLM
-    emergent_key = os.environ.get('EMERGENT_LLM_KEY', '')
+    # OpenAI
+    openai_key = os.environ.get('OPENAI_API_KEY', '')
     integrations.append({
-        "name": "Emergent AI (LLM)",
+        "name": "OpenAI",
         "type": "ai",
         "icon": "🤖",
-        "status": "configured" if emergent_key else "not configured",
+        "status": "configured" if openai_key else "not configured",
         "details": {
-            "key": emergent_key[:20] + "..." if emergent_key else "not set"
+            "key": openai_key[:20] + "..." if openai_key else "not set"
         }
     })
     

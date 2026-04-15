@@ -110,7 +110,7 @@ const PaymentResultPage = () => {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <Link to="/" className="flex items-center">
             <img 
-              src="https://customer-assets.emergentagent.com/job_plush-revamp/artifacts/npuc23bl_lgoo%20ads%20%281%29.png" 
+              src="/logo.svg" 
               alt="Droomvriendjes" 
               className="h-16 md:h-20 w-auto"
             />

@@ -95,15 +95,15 @@ class ChatResponse(BaseModel):
     response: str
     session_id: str
 
-# AI Chat using emergentintegrations
+# AI Chat using OpenAI
 async def get_ai_response(message: str, session_id: str, chat_history: List[Dict] = None) -> str:
-    """Get AI response using emergentintegrations library"""
+    """Get AI response using OpenAI API"""
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        
-        api_key = os.environ.get('EMERGENT_LLM_KEY')
+        from openai import AsyncOpenAI
+
+        api_key = os.environ.get('OPENAI_API_KEY')
         if not api_key:
-            logger.warning("EMERGENT_LLM_KEY not set, using mock response")
+            logger.warning("OPENAI_API_KEY not set, using mock response")
             return get_mock_ai_response(message)
         
         system_message = """Je bent de AI Marketing Assistant voor Droomvriendjes, een Nederlandse e-commerce winkel voor slaapknuffels.
@@ -127,16 +127,27 @@ Je hebt toegang tot de volgende statistieken:
 
 Geef korte, behulpzame antwoorden. Maximaal 2-3 zinnen tenzij meer detail nodig is."""
 
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=session_id,
-            system_message=system_message
-        ).with_model("openai", "gpt-4o")
-        
-        user_message = UserMessage(text=message)
-        response = await chat.send_message(user_message)
-        
-        return response
+        client = AsyncOpenAI(api_key=api_key)
+
+        history_messages = []
+        if chat_history:
+            for item in chat_history[-6:]:
+                role = item.get("role")
+                content = item.get("content", "")
+                if role in {"user", "assistant"} and content:
+                    history_messages.append({"role": role, "content": content})
+
+        completion = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_message},
+                *history_messages,
+                {"role": "user", "content": message}
+            ],
+            temperature=0.5
+        )
+
+        return completion.choices[0].message.content or get_mock_ai_response(message)
         
     except Exception as e:
         logger.error(f"AI chat error: {e}")

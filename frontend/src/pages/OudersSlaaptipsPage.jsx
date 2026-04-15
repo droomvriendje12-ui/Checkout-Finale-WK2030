@@ -276,7 +276,7 @@ const OudersSlaaptipsPage = () => {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link to="/" className="flex items-center space-x-2">
             <img 
-              src="https://customer-assets.emergentagent.com/job_plush-revamp/artifacts/npuc23bl_lgoo%20ads%20%281%29.png" 
+              src="/logo.svg" 
               alt="Droomvriendjes.nl" 
               className="h-12 w-auto"
             />
